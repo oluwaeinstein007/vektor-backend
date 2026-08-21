@@ -1,0 +1,24 @@
+{
+  "name": "@vektor/map-tile-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SVC-006: PMTiles static server. Serves .pmtiles archives with HTTP Range support — the PMTiles *client* (MapLibre's pmtiles protocol, apps/web) does all offset/tile-extraction math against Range requests; this server only needs correct byte-range HTTP semantics.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/tests/*.test.js",
+    "start": "node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.4",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
