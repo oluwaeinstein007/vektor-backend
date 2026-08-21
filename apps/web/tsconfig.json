@@ -12,6 +12,7 @@
     "noEmit": true,
     "incremental": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"

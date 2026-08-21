@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { EntityLayer } from "./entity-layer";
+import { SensorHealthPanel } from "./sensor-health-panel";
+import { useEntityUpdates } from "@/hooks/useEntityUpdates";
 
 export interface MapLayer {
   id: string;
@@ -33,6 +36,15 @@ export function BaseMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [layers, setLayers] = useState(INITIAL_LAYERS);
+  // Subscribed here, not inside EntityLayer: this runs as soon as the
+  // socket connects, independent of the map's "load" event (which can take
+  // much longer) — see entity-layer.tsx's comment for why that ordering
+  // matters.
+  useEntityUpdates((event, error) => console.warn(`[BaseMap] invalid ${event} payload`, error));
+  // Separate from mapRef: FE-002's EntityLayer needs to render only once
+  // MapLibre has actually finished loading the style (addSource/addLayer
+  // throw before that), and a ref change alone doesn't trigger a re-render.
+  const [readyMap, setReadyMap] = useState<MapLibreMap | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -59,11 +71,13 @@ export function BaseMap() {
     });
 
     mapRef.current = map;
+    map.on("load", () => setReadyMap(map));
 
     return () => {
       map.remove();
       maplibregl.removeProtocol("pmtiles");
       mapRef.current = null;
+      setReadyMap(null);
     };
   }, []);
 
@@ -82,10 +96,14 @@ export function BaseMap() {
     map.setLayoutProperty(id, "visibility", nextVisible ? "visible" : "none");
   }
 
+  const entityLayerVisible = layers.find((l) => l.id === "entities")?.visible ?? true;
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      {readyMap && <EntityLayer map={readyMap} visible={entityLayerVisible} />}
       <LayerPanel layers={layers} onToggle={toggleLayer} />
+      <SensorHealthPanel />
     </div>
   );
 }
