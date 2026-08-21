@@ -1,0 +1,29 @@
+{
+  "name": "@vektor/kafka",
+  "version": "0.1.0",
+  "private": true,
+  "description": "kafkajs client wrapper + topic-name helpers shared by every producer/consumer service. See VEKTOR-PRD.md §12.3.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vektor/proto": "link:../../../vektor-proto",
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

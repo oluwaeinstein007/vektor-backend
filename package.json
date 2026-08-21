@@ -1,0 +1,21 @@
+{
+  "name": "vektor-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "All TypeScript apps and microservices for VEKTOR. See ../vektor-docs/VEKTOR-PRD.md §9.",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=20"
+  }
+}
