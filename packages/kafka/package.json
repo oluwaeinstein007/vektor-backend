@@ -17,7 +17,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist"
+    "test": "tsc -p tsconfig.test.json && node --test dist-tests/tests/*.test.js",
+    "clean": "rm -rf dist dist-tests"
   },
   "dependencies": {
     "@vektor/proto": "link:../../../vektor-proto",
