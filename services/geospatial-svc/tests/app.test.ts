@@ -41,15 +41,24 @@ async function insertEntity(overrides: Partial<Record<string, unknown>> = {}) {
   const id = randomUUID();
   const lon = overrides.lon ?? -122.42;
   const lat = overrides.lat ?? 37.77;
+  const sourceSensors = (overrides.source_sensors as string[] | undefined) ?? ["sensor-1"];
+  // drizzle-orm's `sql` tag hands array params through to the `postgres`
+  // driver untouched, which stringifies a plain JS array via .toString()
+  // (e.g. ["a","b"] -> "a,b") instead of a Postgres array literal — so this
+  // builds the "{a,b}" literal by hand and casts it explicitly.
+  const sourceSensorsLiteral = `{${sourceSensors.join(",")}}`;
   await db.execute(sql`
-    INSERT INTO entities (entity_id, classification, confidence, status, affiliation, position)
+    INSERT INTO entities (entity_id, classification, confidence, status, affiliation, source_sensors, position, alt_m, accuracy_m)
     VALUES (
       ${id},
       ${overrides.classification ?? "GroundVehicle.Tracked"},
       ${overrides.confidence ?? 0.9},
       ${overrides.status ?? "ACTIVE"},
       ${overrides.affiliation ?? "UNKNOWN"},
-      ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)
+      ${sourceSensorsLiteral}::text[],
+      ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326),
+      ${overrides.alt_m ?? 12.5},
+      ${overrides.accuracy_m ?? 2.5}
     )
   `);
   return id;
@@ -96,6 +105,27 @@ test("GET /api/v1/entities filters by bbox — the real ST_Contains path", async
   const body = res.json();
   assert.equal(body.data.length, 1);
   assert.equal(body.data[0].entity_id, insideId);
+});
+
+test("GET /api/v1/entities/:id returns the full canonical Entity shape", async () => {
+  const id = await insertEntity({ lon: -122.42, lat: 37.77, source_sensors: ["drone-7", "ais-1"] });
+
+  const res = await app.inject({ method: "GET", url: `/api/v1/entities/${id}` });
+  assert.equal(res.statusCode, 200);
+  const entity = res.json();
+
+  // Response schema validation (fastify-type-provider-zod, wired in
+  // routes/entities.ts) already rejects a non-conforming payload before it
+  // reaches the client — these assertions confirm the mapped *values* are
+  // right, not just that something shaped like an Entity came back.
+  assert.deepEqual(entity.source_sensors, ["drone-7", "ais-1"]);
+  assert.equal(entity.position.lon, -122.42);
+  assert.equal(entity.position.lat, 37.77);
+  assert.equal(entity.position.alt_m, 12.5);
+  assert.equal(entity.position.accuracy_m, 2.5);
+  assert.equal(typeof entity.position.mgrs, "string");
+  assert.ok(entity.position.mgrs.length > 0);
+  assert.deepEqual(entity.kinematics, { speed_kmh: 0, heading_deg: 0, trajectory: [] });
 });
 
 test("GET /api/v1/entities/:id returns 404 for an unknown id", async () => {

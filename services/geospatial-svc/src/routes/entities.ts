@@ -12,6 +12,19 @@ import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { Entity } from "@vektor/shared";
 import { getEntity, listEntities, tagEntity } from "../queries/entities.js";
+import { toWireEntity } from "../mappers/entity.js";
+
+const ErrorResponse = z.object({ error: z.string() });
+
+// Response schemas are the enforcement mechanism for REQ-9.1 ("100% of
+// public endpoints ... schema-validated"): fastify-type-provider-zod
+// serializes through these, so a handler that returns a shape Entity
+// doesn't match fails at response time instead of shipping silently.
+const ListEntitiesResponse = z.object({
+  data: z.array(Entity),
+  page: z.number().int(),
+  limit: z.number().int(),
+});
 
 const BboxQueryParam = z
   .string()
@@ -47,7 +60,7 @@ const entitiesRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.get(
     "/api/v1/entities",
-    { schema: { querystring: ListEntitiesQuery } },
+    { schema: { querystring: ListEntitiesQuery, response: { 200: ListEntitiesResponse } } },
     async (request) => {
       const { class: classification, affiliation, bbox, page, limit } = request.query;
       const rows = await listEntities(app.db, {
@@ -57,30 +70,36 @@ const entitiesRoutes: FastifyPluginAsync = async (app) => {
         limit,
         offset: (page - 1) * limit,
       });
-      return { data: rows, page, limit };
+      return { data: rows.map(toWireEntity), page, limit };
     },
   );
 
   typedApp.get(
     "/api/v1/entities/:id",
-    { schema: { params: EntityIdParams } },
+    { schema: { params: EntityIdParams, response: { 200: Entity, 404: ErrorResponse } } },
     async (request, reply) => {
       const entity = await getEntity(app.db, request.params.id);
       if (!entity) return reply.code(404).send({ error: "entity not found" });
-      return entity;
+      return toWireEntity(entity);
     },
   );
 
   typedApp.post(
     "/api/v1/entities/:id/tag",
-    { schema: { params: EntityIdParams, body: TagEntityBody } },
+    {
+      schema: {
+        params: EntityIdParams,
+        body: TagEntityBody,
+        response: { 200: Entity, 404: ErrorResponse },
+      },
+    },
     async (request, reply) => {
       // TODO(auth-svc): reject here with 403 if request.user's role isn't
       // Analyst+ (REQ table, §13.1) — no auth middleware exists yet to
       // populate request.user, so there's nothing to check against.
       const updated = await tagEntity(app.db, request.params.id, request.body.tag);
       if (!updated) return reply.code(404).send({ error: "entity not found" });
-      return updated;
+      return toWireEntity(updated);
     },
   );
 };
