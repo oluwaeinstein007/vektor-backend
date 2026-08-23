@@ -17,5 +17,11 @@
   "packageManager": "pnpm@10.28.1",
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "onnxruntime-node",
+      "sharp"
+    ]
   }
 }
