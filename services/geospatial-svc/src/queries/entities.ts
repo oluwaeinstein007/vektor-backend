@@ -27,8 +27,15 @@ export async function listEntities(db: VektorDb, filter: ListEntitiesFilter) {
     // ST_MakeEnvelope(xmin, ymin, xmax, ymax, srid) — PostGIS wants
     // lon/lat order (x/y), not lat/lon, which is why this isn't a plain
     // Drizzle column comparison.
+    //
+    // entities.position has SRID 0, not 4326 — Drizzle's built-in geometry()
+    // column helper never tags a written point with an SRID (see
+    // vektor-build-conventions memory). ST_Contains between that and a
+    // properly-SRID-4326 envelope throws "Operation on mixed SRID
+    // geometries" without this ST_SetSRID wrap; found 2026-08-23 while
+    // building fusion-svc's no-strike check, which hit the identical issue.
     conditions.push(
-      sql`ST_Contains(ST_MakeEnvelope(${min_lon}, ${min_lat}, ${max_lon}, ${max_lat}, 4326), ${entities.position})`,
+      sql`ST_Contains(ST_MakeEnvelope(${min_lon}, ${min_lat}, ${max_lon}, ${max_lat}, 4326), ST_SetSRID(${entities.position}, 4326))`,
     );
   }
 

@@ -47,6 +47,15 @@ async function insertEntity(overrides: Partial<Record<string, unknown>> = {}) {
   // (e.g. ["a","b"] -> "a,b") instead of a Postgres array literal — so this
   // builds the "{a,b}" literal by hand and casts it explicitly.
   const sourceSensorsLiteral = `{${sourceSensors.join(",")}}`;
+  // Deliberately NOT ST_SetSRID(...,4326) here: the real application write
+  // path (Drizzle's built-in geometry() point column) writes a plain
+  // `point(lon lat)` with no SRID (SRID 0) — see
+  // packages/db/src/schema/entities.ts and vektor-build-conventions memory.
+  // An earlier version of this fixture used ST_SetSRID and masked a real
+  // "Operation on mixed SRID geometries" bug in the bbox query below (found
+  // 2026-08-23 building fusion-svc, which hit the identical issue) — the
+  // fixture matched neither this test's own bbox envelope (SRID 4326) NOR
+  // production, so the mismatch never had a chance to surface here.
   await db.execute(sql`
     INSERT INTO entities (entity_id, classification, confidence, status, affiliation, source_sensors, position, alt_m, accuracy_m)
     VALUES (
@@ -56,7 +65,7 @@ async function insertEntity(overrides: Partial<Record<string, unknown>> = {}) {
       ${overrides.status ?? "ACTIVE"},
       ${overrides.affiliation ?? "UNKNOWN"},
       ${sourceSensorsLiteral}::text[],
-      ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326),
+      ST_MakePoint(${lon}, ${lat}),
       ${overrides.alt_m ?? 12.5},
       ${overrides.accuracy_m ?? 2.5}
     )

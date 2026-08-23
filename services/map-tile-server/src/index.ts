@@ -1,6 +1,9 @@
 import { buildApp } from "./app.js";
 
-const PORT = Number(process.env.PORT ?? 3006);
+// 3006 collides with cv-inference-svc's default PORT (found 2026-08-23) — a
+// same-machine dev run of both needs distinct ports. 3008 to leave 3007 for
+// fusion-svc.
+const PORT = Number(process.env.PORT ?? 3008);
 const TILES_DIR = process.env.TILES_DIR ?? "/data/tiles";
 
 const app = buildApp({ tilesDir: TILES_DIR });
