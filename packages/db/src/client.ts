@@ -1,6 +1,6 @@
 import postgres, { type Sql } from "postgres";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import * as schema from "./schema/entities.js";
+import * as schema from "./schema/index.js";
 
 // $client exposes the underlying postgres.js connection pool so callers
 // (tests, graceful-shutdown handlers) can close it — drizzle() returns this

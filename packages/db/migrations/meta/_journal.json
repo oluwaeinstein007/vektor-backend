@@ -15,6 +15,13 @@
       "when": 1787281788311,
       "tag": "0001_clammy_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787513861017,
+      "tag": "0002_sweet_harpoon",
+      "breakpoints": true
     }
   ]
 }

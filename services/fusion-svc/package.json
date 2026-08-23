@@ -1,0 +1,37 @@
+{
+  "name": "@vektor/fusion-svc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SVC-007..011: Kafka+Redis Streams fusion pipeline (§9.7). EKF position smoothing, cross-sensor dedup, canonical Entity mapping, blue-force/no-strike zones, EW/RF correlation. Also the Socket.io gateway apps/web's FE-002 consumes (§13.2).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/tests/*.test.js",
+    "start": "node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vektor/db": "workspace:*",
+    "@vektor/kafka": "workspace:*",
+    "@vektor/redis": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "fastify": "^5.2.0",
+    "fastify-type-provider-zod": "^4.0.2",
+    "ioredis": "^5.4.2",
+    "kafkajs": "^2.2.4",
+    "mathjs": "^15.2.0",
+    "mgrs": "^2.1.0",
+    "pino": "^9.6.0",
+    "socket.io": "^4.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "socket.io-client": "^4.8.1",
+    "typescript": "^5.7.2"
+  }
+}

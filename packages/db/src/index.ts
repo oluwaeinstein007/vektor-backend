@@ -1,2 +1,2 @@
-export * from "./schema/entities.js";
+export * from "./schema/index.js";
 export * from "./client.js";
