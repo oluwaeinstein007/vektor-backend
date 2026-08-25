@@ -5,8 +5,10 @@ import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { EntityLayer } from "./entity-layer";
+import { NoStrikeZoneLayer } from "./no-strike-zone-layer";
 import { SensorHealthPanel } from "./sensor-health-panel";
 import { useEntityUpdates } from "@/hooks/useEntityUpdates";
+import { HUD_PANEL_STYLE, HUD_PANEL_TITLE_STYLE } from "@/lib/hud-style";
 
 export interface MapLayer {
   id: string;
@@ -64,6 +66,11 @@ export function BaseMap() {
             // once EDGE-004 map packs land — this is the minimum that
             // proves the pmtiles:// protocol is actually wired up.
             layers: [{ id: "background", type: "background", paint: { "background-color": "#0a0a0a" } }],
+            // Without this, EntityLayer/NoStrikeZoneLayer's text-field
+            // labels would silently fail to render (no font glyphs to draw
+            // with) — reuse the same public glyphs endpoint the fallback
+            // style below already relies on.
+            glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
           }
         : FALLBACK_STYLE_URL,
       center: [0, 20],
@@ -72,6 +79,13 @@ export function BaseMap() {
 
     mapRef.current = map;
     map.on("load", () => setReadyMap(map));
+
+    // Dev-only escape hatch so tooling (e.g. a Playwright screenshot script)
+    // can drive the map without simulating mouse gestures — never present
+    // in a production build.
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as { __vektorMap?: MapLibreMap }).__vektorMap = map;
+    }
 
     return () => {
       map.remove();
@@ -97,11 +111,13 @@ export function BaseMap() {
   }
 
   const entityLayerVisible = layers.find((l) => l.id === "entities")?.visible ?? true;
+  const noStrikeZonesVisible = layers.find((l) => l.id === "no-strike-zones")?.visible ?? false;
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       {readyMap && <EntityLayer map={readyMap} visible={entityLayerVisible} />}
+      {readyMap && <NoStrikeZoneLayer map={readyMap} visible={noStrikeZonesVisible} />}
       <LayerPanel layers={layers} onToggle={toggleLayer} />
       <SensorHealthPanel />
     </div>
@@ -116,27 +132,15 @@ function LayerPanel({
   onToggle: (id: string) => void;
 }) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 12,
-        right: 12,
-        background: "var(--background)",
-        color: "var(--foreground)",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 14,
-      }}
-    >
+    <div style={{ position: "absolute", top: 12, right: 12, ...HUD_PANEL_STYLE, minWidth: 168 }}>
+      <div style={HUD_PANEL_TITLE_STYLE}>MAP LAYERS</div>
       {layers.map((layer) => (
-        <label key={layer.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="checkbox"
-            checked={layer.visible}
-            onChange={() => onToggle(layer.id)}
-          />
-          {layer.label}
+        <label
+          key={layer.id}
+          style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0", cursor: "pointer" }}
+        >
+          <input type="checkbox" checked={layer.visible} onChange={() => onToggle(layer.id)} />
+          <span style={{ letterSpacing: "0.02em" }}>{layer.label.toUpperCase()}</span>
         </label>
       ))}
     </div>

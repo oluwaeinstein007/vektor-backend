@@ -1,0 +1,35 @@
+{
+  "name": "@vektor/coa-svc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ML-008..011, SVC-012..013: Target Workbench threat scoring, RAG-grounded COA generation (cloud gRPC + edge node-llama-cpp), approval workflow. See VEKTOR-PRD.md Epic 4.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/tests/*.test.js",
+    "start": "node dist/src/index.js",
+    "ingest-doctrine": "pnpm build && node dist/scripts/ingest-doctrine.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@grpc/grpc-js": "^1.12.2",
+    "@vektor/db": "workspace:*",
+    "@vektor/qdrant": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "fastify": "^5.2.0",
+    "fastify-type-provider-zod": "^4.0.2",
+    "mgrs": "^2.1.0",
+    "node-llama-cpp": "^3.20.0",
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -21,7 +21,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "onnxruntime-node",
-      "sharp"
+      "sharp",
+      "node-llama-cpp",
+      "protobufjs",
+      "better-sqlite3"
     ]
   }
 }

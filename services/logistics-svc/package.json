@@ -1,0 +1,34 @@
+{
+  "name": "@vektor/logistics-svc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SVC-017..019: Debezium ERP CDC sync, ml-regression supply forecasting, pgRouting route optimization (§9.7, Epic 6).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test --test-concurrency=1 dist/tests/*.test.js",
+    "start": "node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@vektor/db": "workspace:*",
+    "@vektor/kafka": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "fastify": "^5.2.0",
+    "fastify-type-provider-zod": "^4.0.2",
+    "kafkajs": "^2.2.4",
+    "ml-regression-simple-linear": "^3.0.1",
+    "pino": "^9.6.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

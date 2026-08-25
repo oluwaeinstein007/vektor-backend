@@ -3,3 +3,8 @@
 // every new table file having to also edit client.ts.
 export * from "./entities.js";
 export * from "./blueForce.js";
+export * from "./coa.js";
+export * from "./auditLog.js";
+export * from "./geofence.js";
+export * from "./logistics.js";
+export * from "./reporting.js";

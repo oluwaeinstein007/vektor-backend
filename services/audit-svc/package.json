@@ -1,0 +1,30 @@
+{
+  "name": "@vektor/audit-svc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SVC-013 (partial): append-only audit event store, REQ-8.3. See VEKTOR-PRD.md §13.1.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/tests/*.test.js",
+    "start": "node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@vektor/db": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "fastify": "^5.2.0",
+    "fastify-type-provider-zod": "^4.0.2",
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -7,7 +7,15 @@ export default defineConfig({
   // tsc has actually emitted entities.js — drizzle-kit never runs the
   // compiler). index.ts is a runtime-only barrel for client.ts; drizzle-kit
   // doesn't need it as long as every table file is listed here directly.
-  schema: ["./src/schema/entities.ts", "./src/schema/blueForce.ts"],
+  schema: [
+    "./src/schema/entities.ts",
+    "./src/schema/blueForce.ts",
+    "./src/schema/coa.ts",
+    "./src/schema/auditLog.ts",
+    "./src/schema/geofence.ts",
+    "./src/schema/logistics.ts",
+    "./src/schema/reporting.ts",
+  ],
   out: "./migrations",
   dialect: "postgresql",
   dbCredentials: {
