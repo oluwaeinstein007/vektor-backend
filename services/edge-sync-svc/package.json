@@ -1,8 +1,8 @@
 {
-  "name": "@vektor/fusion-svc",
+  "name": "@vektor/edge-sync-svc",
   "version": "0.1.0",
   "private": true,
-  "description": "SVC-007..011: Kafka+Redis Streams fusion pipeline (§9.7). EKF position smoothing, cross-sensor dedup, canonical Entity mapping, blue-force/no-strike zones, EW/RF correlation. Also the Socket.io gateway apps/web's FE-002 consumes (§13.2).",
+  "description": "EDGE-005/006: a Tactical Edge Node's local sync layer — a persisted-offset Kafka consumer that delta-catches-up entity state on reconnect (not a full replay, and not relying solely on the broker's group-commit position), plus the BullMQ intake queue field-pwa's offline IndexedDB writes drain into once connectivity returns (§9.7, §11.4).",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -15,25 +15,20 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
-    "@vektor/db": "workspace:*",
     "@vektor/kafka": "workspace:*",
-    "@vektor/redis": "workspace:*",
     "@vektor/shared": "workspace:*",
+    "better-sqlite3": "^13.0.3",
     "bullmq": "^5.34.5",
-    "drizzle-orm": "^0.38.3",
     "fastify": "^5.2.0",
     "fastify-type-provider-zod": "^4.0.2",
     "ioredis": "^5.4.2",
     "kafkajs": "^2.2.4",
-    "mathjs": "^15.2.0",
-    "mgrs": "^2.1.0",
     "pino": "^9.6.0",
-    "socket.io": "^4.8.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.2",
-    "socket.io-client": "^4.8.1",
     "typescript": "^5.7.2"
   }
 }

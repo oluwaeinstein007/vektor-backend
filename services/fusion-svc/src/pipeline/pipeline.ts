@@ -4,9 +4,12 @@
 // it to the canonical Entity (SVC-009), persist it, and push the result out
 // over the Socket.io gateway (§13.2) that apps/web's FE-002 has been
 // waiting on since Phase 1.
+import type { Queue } from "bullmq";
+import type { Producer } from "kafkajs";
 import type { WatermarkWindow } from "@vektor/redis";
 import type { VektorDb } from "@vektor/db";
-import { AisPositionReport, AdsbPositionReport, EwRfEmission } from "@vektor/shared";
+import type { VektorEnv } from "@vektor/kafka";
+import { AisPositionReport, AdsbPositionReport, EwRfEmission, type GeofenceCheckJob } from "@vektor/shared";
 import { TrackManager, type TrackObservation } from "./trackManager.js";
 import { ExtendedKalmanFilter } from "../ekf/extendedKalmanFilter.js";
 import { fromAis, fromAdsb, fromEwRf } from "./observationMappers.js";
@@ -14,6 +17,8 @@ import { mapToEntity } from "../ontology/mapToEntity.js";
 import { isInNoStrikeZone } from "../blueforce/queries.js";
 import { upsertEntity } from "../db/upsertEntity.js";
 import type { FusionGateway } from "../socket/gateway.js";
+import { enqueueGeofenceCheck } from "../queue/geofenceProducer.js";
+import { publishEntityUpserted } from "../kafka/entityProducer.js";
 
 function toObservation(domain: string, payload: unknown): TrackObservation | null {
   switch (domain) {
@@ -34,6 +39,16 @@ export interface PipelineDeps {
   trackManager: TrackManager;
   db: VektorDb;
   gateway: FusionGateway;
+  // Optional so every pre-Phase-5 test of this pipeline keeps working
+  // unchanged — alert-svc's geofence/anomaly checks are additive, not a
+  // pipeline correctness dependency.
+  geofenceQueue?: Queue<GeofenceCheckJob>;
+  // Optional for the same reason — EDGE-006's durable entity topic is an
+  // additive replay channel for edge-sync-svc, not a pipeline correctness
+  // dependency. Requires env because the topic name is env-prefixed
+  // (§12.3), same as every other topic this service touches.
+  entityTopicProducer?: Producer;
+  env?: VektorEnv;
 }
 
 export interface ProcessedEvent {
@@ -63,6 +78,18 @@ export async function runPipelineOnce(deps: PipelineDeps, blockMs: number): Prom
       deps.gateway.emitEntityUpdated(entity.entity_id, changedFields, entity);
     }
 
+    if (deps.geofenceQueue && (isNew || changedFields.length > 0)) {
+      await enqueueGeofenceCheck(deps.geofenceQueue, entity);
+    }
+
+    if (deps.entityTopicProducer && deps.env && (isNew || changedFields.length > 0)) {
+      await publishEntityUpserted(deps.entityTopicProducer, deps.env, {
+        entity_id: entity.entity_id,
+        entity,
+        ts: entity.last_updated,
+      });
+    }
+
     processed.push({ domain: event.domain, entityId: entity.entity_id, isNew, changedFields });
   }
 
@@ -71,6 +98,13 @@ export async function runPipelineOnce(deps: PipelineDeps, blockMs: number): Prom
     const entity = mapToEntity(track, { noStrike: false });
     await upsertEntity(deps.db, entity);
     deps.gateway.emitEntityLost(track.entity_id, entity.position, nowIso);
+    if (deps.entityTopicProducer && deps.env) {
+      await publishEntityUpserted(deps.entityTopicProducer, deps.env, {
+        entity_id: entity.entity_id,
+        entity: null,
+        ts: nowIso,
+      });
+    }
   }
 
   return processed;

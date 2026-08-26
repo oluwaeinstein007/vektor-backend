@@ -1,0 +1,62 @@
+# EDGE-002/EDGE-003, §9.8: "Every PR: Cross-compile ARM64" for the services
+# that actually run on the Jetson AGX Orin edge profile (cv-inference-svc:
+# onnxruntime-node + YOLOv8n INT8; coa-svc in VEKTOR_COA_MODE=edge:
+# node-llama-cpp + a local GGUF; edge-sync-svc: better-sqlite3 + the
+# EDGE-006 delta-sync consumer). This only proves the
+# image builds and its native ARM64 bindings (onnxruntime-node,
+# node-llama-cpp, sharp) actually load and run under real ARM64 code (via
+# QEMU user-mode emulation, since no native ARM64 runner exists here
+# either) — real hardware/GPU throughput is still hardware-in-the-loop-only,
+# same gap vektor-edge's own CI documents for the Jetson itself
+# (tests/hardware-in-the-loop/README.md).
+#
+# NOTE: no general vektor-platform CI workflow exists yet (INFRA-008 is
+# still open across this repo) — this job is scoped narrowly to what
+# EDGE-002/EDGE-003 need, not a substitute for that.
+name: edge-arm64-build
+
+on:
+  pull_request:
+    paths:
+      - "services/cv-inference-svc/**"
+      - "services/coa-svc/**"
+      - "services/edge-sync-svc/**"
+      - "packages/**"
+  push:
+    branches: [main]
+    paths:
+      - "services/cv-inference-svc/**"
+      - "services/coa-svc/**"
+      - "services/edge-sync-svc/**"
+      - "packages/**"
+
+jobs:
+  cross-compile:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [cv-inference-svc, coa-svc, edge-sync-svc]
+    steps:
+      # Both Dockerfiles COPY vektor-proto/ + vektor-platform/ as siblings
+      # (see services/cv-inference-svc/Dockerfile's header comment for why —
+      # the cross-repo `link:../../../vektor-proto` dependency needs that
+      # exact relative layout), so this checks out both repos into one
+      # workspace root rather than just this one.
+      - uses: actions/checkout@v4
+        with:
+          path: vektor-platform
+      - uses: actions/checkout@v4
+        with:
+          repository: oluwaeinstein007/vektor-proto
+          path: vektor-proto
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: vektor-platform/services/${{ matrix.service }}/Dockerfile
+          platforms: linux/arm64
+          push: false
+          tags: vektor/${{ matrix.service }}:edge-arm64-ci

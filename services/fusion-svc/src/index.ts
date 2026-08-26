@@ -6,6 +6,7 @@ import { buildApp } from "./app.js";
 import { FusionGateway } from "./socket/gateway.js";
 import { runIngestConsumers, FUSION_DOMAINS } from "./kafka/ingestConsumers.js";
 import { runPipelineOnce, createTrackManager } from "./pipeline/pipeline.js";
+import { createGeofenceCheckQueue } from "./queue/geofenceProducer.js";
 
 const logger = pino({ name: "fusion-svc" });
 
@@ -41,18 +42,25 @@ async function main(): Promise<void> {
     consumer,
     redis,
     env: VEKTOR_ENV,
+    onSensorHealth: (health) => gateway.emitSensorStatus(health),
     onError: (domain, err) => logger.warn({ domain, err }, "failed to ingest event"),
   });
 
   const window = new WatermarkWindow(redis, [...FUSION_DOMAINS], WATERMARK_MS);
   const trackManager = createTrackManager();
+  const geofenceQueue = createGeofenceCheckQueue(REDIS_URL);
+  const entityTopicProducer = kafka.producer();
+  await entityTopicProducer.connect();
 
   let running = true;
   let processedCount = 0;
   const pipelineLoop = (async () => {
     while (running) {
       try {
-        const processed = await runPipelineOnce({ window, trackManager, db, gateway }, POLL_BLOCK_MS);
+        const processed = await runPipelineOnce(
+          { window, trackManager, db, gateway, geofenceQueue, entityTopicProducer, env: VEKTOR_ENV },
+          POLL_BLOCK_MS,
+        );
         processedCount += processed.length;
       } catch (err) {
         logger.warn({ err }, "pipeline cycle failed");
@@ -67,6 +75,8 @@ async function main(): Promise<void> {
     await app.close();
     await gateway.close();
     await consumer.disconnect();
+    await geofenceQueue.close();
+    await entityTopicProducer.disconnect();
     redis.disconnect();
     await db.$client.end();
     process.exit(0);

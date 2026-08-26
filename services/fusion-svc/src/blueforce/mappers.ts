@@ -20,7 +20,7 @@ export function toWireNoStrikeZone(row: NoStrikeZoneRow): NoStrikeZone {
     source: row.source,
     source_asset_id: row.source_asset_id,
     polygon: row.polygon,
-    created_at: row.created_at.toISOString(),
-    updated_at: row.updated_at.toISOString(),
+    created_at: new Date(row.created_at).toISOString(),
+    updated_at: new Date(row.updated_at).toISOString(),
   });
 }

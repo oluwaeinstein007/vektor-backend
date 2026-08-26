@@ -17,7 +17,7 @@ import type { Consumer } from "kafkajs";
 import type { Redis } from "@vektor/redis";
 import { publishToStream } from "@vektor/redis";
 import { topicName, type VektorEnv } from "@vektor/kafka";
-import { DetectionEvent, AisPositionReport, AdsbPositionReport, EwRfEmission } from "@vektor/shared";
+import { DetectionEvent, AisPositionReport, AdsbPositionReport, EwRfEmission, type SensorHealth } from "@vektor/shared";
 
 export const FUSION_DOMAINS = ["detection", "ais", "adsb", "ewrf"] as const;
 export type FusionDomain = (typeof FUSION_DOMAINS)[number];
@@ -40,6 +40,8 @@ export interface IngestConsumersOptions {
   consumer: Consumer;
   redis: Redis;
   env: VektorEnv;
+  /** REQ-1.8: called once per successfully-parsed message so the caller can surface it via sensor:status — every domain schema carries sensor_id/sensor_ts, so this is derivable generically rather than per-domain. */
+  onSensorHealth?: (health: SensorHealth) => void;
   onError?: (domain: FusionDomain, err: Error) => void;
 }
 
@@ -59,6 +61,15 @@ export async function runIngestConsumers(options: IngestConsumersOptions): Promi
       try {
         const parsed = SCHEMAS[domain].parse(JSON.parse(message.value.toString()));
         await publishToStream(options.redis, domain, parsed.sensor_ts, parsed);
+        // No adapter attaches a sequence number yet (SVC-003), so drop_rate
+        // can't be measured for real — 0 is the honest default until one does.
+        options.onSensorHealth?.({
+          sensor_id: parsed.sensor_id,
+          status: "ONLINE",
+          latency_ms: Math.max(0, Date.now() - Date.parse(parsed.sensor_ts)),
+          drop_rate: 0,
+          last_heartbeat: new Date().toISOString(),
+        });
       } catch (err) {
         options.onError?.(domain, err instanceof Error ? err : new Error(String(err)));
       }
