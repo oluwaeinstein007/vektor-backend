@@ -35,7 +35,9 @@ export default function buildReportRoutes(storageDir: string): FastifyPluginAsyn
     // contract simple (no separate poll loop needed for the common case).
     typedApp.post(
       "/api/v1/reports",
-      { schema: { body: CreateReportBody, response: { 200: Report } } },
+      // Not in 07-data-api.md's table (see file header); Analyst+, same as
+      // the retrieval route below.
+      { preHandler: app.requireRole("analyst+"), schema: { body: CreateReportBody, response: { 200: Report } } },
       async (request) => {
         const report = await createPendingReport(app.db, request.body.format);
         await generateReport(app.db, report.report_id, request.body.format, storageDir);
@@ -52,7 +54,7 @@ export default function buildReportRoutes(storageDir: string): FastifyPluginAsyn
     // 200 cases fall back to Fastify's default (un-validated) serialization.
     app.get(
       "/api/v1/reports/:id",
-      { schema: { params: ReportIdParams, response: { 404: ErrorResponse } } },
+      { preHandler: app.requireRole("analyst+"), schema: { params: ReportIdParams, response: { 404: ErrorResponse } } },
       async (request, reply) => {
         const report = await getReport(app.db, (request.params as { id: string }).id);
         if (!report) return reply.code(404).send({ error: "report not found" });

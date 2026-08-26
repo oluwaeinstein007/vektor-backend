@@ -22,7 +22,7 @@ export default function buildRouteRoutes(routingSql: Sql): FastifyPluginAsync {
 
     typedApp.post(
       "/api/v1/logistics/route",
-      { schema: { body: RouteRequest, response: { 200: RouteResult } } },
+      { preHandler: app.requireRole("logistics+"), schema: { body: RouteRequest, response: { 200: RouteResult } } },
       async (request) => {
         return findRoute(routingSql, request.body);
       },
@@ -30,7 +30,14 @@ export default function buildRouteRoutes(routingSql: Sql): FastifyPluginAsync {
 
     typedApp.post(
       "/api/v1/logistics/road-edges/:id/block",
-      { schema: { params: EdgeIdParams, body: BlockBody, response: { 200: z.object({ ok: z.literal(true) }), 404: ErrorResponse } } },
+      {
+        // Not in 07-data-api.md's table (see file header); flagging a
+        // hazard is Analyst+ (anyone can report a threat) rather than
+        // Logistics-only, since REQ-6.2 frames it as a general hazard flag
+        // consumed by route planning, not a logistics-specific action.
+        preHandler: app.requireRole("analyst+"),
+        schema: { params: EdgeIdParams, body: BlockBody, response: { 200: z.object({ ok: z.literal(true) }), 404: ErrorResponse } },
+      },
       async (request, reply) => {
         const ok = await setEdgeBlocked(routingSql, request.params.id, request.body.blocked);
         if (!ok) return reply.code(404).send({ error: "edge not found" });

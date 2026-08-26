@@ -1,5 +1,6 @@
 import pino from "pino";
 import { createDb } from "@vektor/db";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { buildApp } from "./app.js";
 
 const logger = pino({ name: "audit-svc" });
@@ -13,7 +14,7 @@ if (!DATABASE_URL) {
 
 async function main(): Promise<void> {
   const db = createDb(DATABASE_URL!);
-  const app = buildApp({ db });
+  const app = buildApp({ db, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "audit-svc listening");
 

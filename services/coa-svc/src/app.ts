@@ -1,8 +1,12 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
+import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
 import type { QdrantClient } from "@vektor/qdrant";
+import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
 import coaRoutes from "./routes/coa.js";
 import targetWorkbenchRoutes from "./routes/targetWorkbench.js";
 import generateRoutes from "./routes/generate.js";
@@ -21,6 +25,7 @@ export interface BuildAppOptions {
   mode: CoaMode;
   auditSvcUrl: string;
   fusionSvcUrl: string;
+  auth: VektorAuthPluginOptions;
   logger?: boolean;
   auditClient?: AuditClient; // test seam — inject a fake instead of a real fetch-based client
 }
@@ -34,6 +39,14 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   app.decorate("db", options.db);
 
   app.register(cors, { origin: true });
+
+  app.register(vektorAuthPlugin, options.auth);
+
+  app.register(fastifySwagger, {
+    openapi: { openapi: "3.1.0", info: { title: "VEKTOR coa-svc API", version: "1.0.0" } },
+    transform: jsonSchemaTransform,
+  });
+  app.register(fastifySwaggerUi, { routePrefix: "/documentation" });
 
   app.get("/healthz", async () => ({ status: "ok" }));
 

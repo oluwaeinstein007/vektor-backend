@@ -1,9 +1,6 @@
 // ML-006 (REQ-2.6): "Upload -> validate -> hot-load in onnxruntime-node
 // within 5 minutes, no service restart." §13.1's `/api/v1/models/upload`
 // (SuperAdmin-only per the REQ table) lives here.
-//
-// Auth isn't wired up yet — same gap geospatial-svc's routes flagged: no
-// auth-svc/Keycloak dependency exists yet for this service to call.
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,7 +27,7 @@ const modelsRoutes: FastifyPluginAsync<ModelsRoutesOptions> = async (app, option
 
   typedApp.post(
     "/api/v1/models/upload",
-    { schema: { response: { 200: UploadResponse, 400: ErrorResponse } } },
+    { preHandler: app.requireRole("superadmin"), schema: { response: { 200: UploadResponse, 400: ErrorResponse } } },
     async (request, reply) => {
       const file = await request.file();
       if (!file) {

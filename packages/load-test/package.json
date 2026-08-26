@@ -1,0 +1,23 @@
+{
+  "name": "@vektor/load-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PERF-001: real Kafka producer/consumer load generator against fusion-svc's actual ingest topics/schemas — 03-nfr.md's 'event ingestion throughput >= 10,000 events/second sustained'. Not a synthetic microbenchmark against a stub: publishes real AisPositionReport messages and consumes them through the identical Zod schema fusion-svc's own consumer validates against.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "run": "pnpm build && node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vektor/kafka": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createDb } from "@vektor/db";
 import { entities } from "@vektor/db";
 import { createQdrantClient } from "@vektor/qdrant";
+import { createTestAuth } from "@vektor/auth/testing";
 import { buildApp } from "../src/app.js";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:vektor@localhost:5433/vektor";
@@ -12,12 +13,14 @@ const QDRANT_URL = process.env.QDRANT_URL ?? "http://localhost:16333";
 test("GET /api/v1/target-workbench/ranking returns ACTIVE entities sorted by threat_score descending", async (t) => {
   const db = createDb(DATABASE_URL);
   const qdrant = createQdrantClient(QDRANT_URL);
+  const testAuth = await createTestAuth();
   const app = buildApp({
     db,
     qdrant,
     mode: { kind: "edge", modelPath: "/nonexistent" },
     auditSvcUrl: "http://unused",
     fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
     logger: false,
   });
   t.after(async () => {
@@ -57,7 +60,11 @@ test("GET /api/v1/target-workbench/ranking returns ACTIVE entities sorted by thr
     },
   ]);
 
-  const res = await app.inject({ method: "GET", url: "/api/v1/target-workbench/ranking" });
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/target-workbench/ranking",
+    headers: await testAuth.authHeader({ sub: "analyst-1", roles: ["Analyst"] }),
+  });
   assert.equal(res.statusCode, 200);
   const body = res.json() as { entity: { entity_id: string }; threat_score: number }[];
 

@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createDb } from "@vektor/db";
 import { createRedisClient } from "@vektor/redis";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { buildApp } from "./app.js";
 import { startAlertWorker } from "./queue/worker.js";
 import { bullmqConnection } from "./queue/producer.js";
@@ -27,7 +28,7 @@ async function main(): Promise<void> {
   const db = createDb(DATABASE_URL!);
   const redis = createRedisClient(REDIS_URL);
 
-  const app = buildApp({ db });
+  const app = buildApp({ db, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "alert-svc HTTP (geofence-zone/alert-triage REST) listening");
 

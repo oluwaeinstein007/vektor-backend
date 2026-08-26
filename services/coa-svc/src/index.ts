@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createDb } from "@vektor/db";
 import { createQdrantClient, ensureDoctrineCollection } from "@vektor/qdrant";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { buildApp } from "./app.js";
 import { createCloudLlmClient } from "./llm/cloudClient.js";
 import type { CoaMode } from "./llm/generateCoa.js";
@@ -36,7 +37,7 @@ async function main(): Promise<void> {
       ? { kind: "edge", modelPath: EDGE_MODEL_PATH! }
       : { kind: "cloud", llmClient: createCloudLlmClient(LLM_CLOUD_SVC_ADDRESS) };
 
-  const app = buildApp({ db, qdrant, mode, auditSvcUrl: AUDIT_SVC_URL, fusionSvcUrl: FUSION_SVC_URL });
+  const app = buildApp({ db, qdrant, mode, auditSvcUrl: AUDIT_SVC_URL, fusionSvcUrl: FUSION_SVC_URL, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT, mode: mode.kind }, "coa-svc listening");
 

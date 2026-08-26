@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createDb } from "@vektor/db";
 import { createKafkaClient } from "@vektor/kafka";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { buildApp } from "./app.js";
 import { createRoutingClient, ensureRoutingSchema } from "./routing/client.js";
 import { seedGrid } from "./routing/seedNetwork.js";
@@ -30,7 +31,7 @@ async function main(): Promise<void> {
     await seedGrid(routingSql);
   }
 
-  const app = buildApp({ db, routingSql });
+  const app = buildApp({ db, routingSql, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "logistics-svc HTTP listening");
 

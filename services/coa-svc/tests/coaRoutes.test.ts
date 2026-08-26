@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createDb } from "@vektor/db";
 import { createQdrantClient } from "@vektor/qdrant";
+import { createTestAuth } from "@vektor/auth/testing";
 import { buildApp } from "../src/app.js";
 import { insertCoa } from "../src/db/coaQueries.js";
 import type { AuditClient } from "../src/audit/client.js";
@@ -43,12 +44,14 @@ test("GET /api/v1/coa/:situation_id returns previously generated COAs for that s
   const db = createDb(DATABASE_URL);
   const qdrant = createQdrantClient(QDRANT_URL);
   const { client: auditClient } = fakeAuditClient();
+  const testAuth = await createTestAuth();
   const app = buildApp({
     db,
     qdrant,
     mode: { kind: "edge", modelPath: "/nonexistent" }, // not exercised by this test
     auditSvcUrl: "http://unused",
     fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
     logger: false,
     auditClient,
   });
@@ -64,7 +67,11 @@ test("GET /api/v1/coa/:situation_id returns previously generated COAs for that s
   const situationId = randomUUID();
   await insertCoa(db, { situation_id: situationId, options: [VALID_OPTION] });
 
-  const res = await app.inject({ method: "GET", url: `/api/v1/coa/${situationId}` });
+  const res = await app.inject({
+    method: "GET",
+    url: `/api/v1/coa/${situationId}`,
+    headers: await testAuth.authHeader({ sub: "cdr-1", roles: ["Commander"] }),
+  });
   assert.equal(res.statusCode, 200);
   const body = res.json();
   assert.equal(body.length, 1);
@@ -72,16 +79,46 @@ test("GET /api/v1/coa/:situation_id returns previously generated COAs for that s
   assert.equal(body[0].status, "PENDING");
 });
 
-test("POST /api/v1/coa/:coa_id/approve sets status/selected_option and writes an audit entry", async (t) => {
+test("GET /api/v1/coa/:situation_id rejects a non-Commander role with 403", async (t) => {
   const db = createDb(DATABASE_URL);
   const qdrant = createQdrantClient(QDRANT_URL);
-  const { client: auditClient, writes } = fakeAuditClient();
+  const { client: auditClient } = fakeAuditClient();
+  const testAuth = await createTestAuth();
   const app = buildApp({
     db,
     qdrant,
     mode: { kind: "edge", modelPath: "/nonexistent" },
     auditSvcUrl: "http://unused",
     fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
+    logger: false,
+    auditClient,
+  });
+  t.after(async () => {
+    await app.close();
+    await db.$client.end();
+  });
+
+  const res = await app.inject({
+    method: "GET",
+    url: `/api/v1/coa/${randomUUID()}`,
+    headers: await testAuth.authHeader({ sub: "analyst-1", roles: ["Analyst"] }),
+  });
+  assert.equal(res.statusCode, 403);
+});
+
+test("POST /api/v1/coa/:coa_id/approve sets status/selected_option and writes an audit entry attributed to the verified Commander", async (t) => {
+  const db = createDb(DATABASE_URL);
+  const qdrant = createQdrantClient(QDRANT_URL);
+  const { client: auditClient, writes } = fakeAuditClient();
+  const testAuth = await createTestAuth();
+  const app = buildApp({
+    db,
+    qdrant,
+    mode: { kind: "edge", modelPath: "/nonexistent" },
+    auditSvcUrl: "http://unused",
+    fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
     logger: false,
     auditClient,
   });
@@ -95,7 +132,8 @@ test("POST /api/v1/coa/:coa_id/approve sets status/selected_option and writes an
   const res = await app.inject({
     method: "POST",
     url: `/api/v1/coa/${row.coa_id}/approve`,
-    payload: { option_rank: 1, notes: "Approved for execution", actor_user_id: "cdr-1", actor_role: "Commander" },
+    payload: { option_rank: 1, notes: "Approved for execution" },
+    headers: await testAuth.authHeader({ sub: "cdr-1", roles: ["Commander"] }),
   });
 
   assert.equal(res.statusCode, 200);
@@ -105,19 +143,56 @@ test("POST /api/v1/coa/:coa_id/approve sets status/selected_option and writes an
   assert.equal(body.commander_notes, "Approved for execution");
 
   assert.equal(writes.length, 1);
-  assert.equal((writes[0] as { action: string }).action, "coa.approve");
+  const write = writes[0] as { action: string; actor_user_id: string; actor_role: string };
+  assert.equal(write.action, "coa.approve");
+  // SEC-003: the actor identity is derived from the verified JWT, not a
+  // client-supplied body field — a caller can no longer approve a COA and
+  // have the audit log attribute it to whatever actor it likes.
+  assert.equal(write.actor_user_id, "cdr-1");
+  assert.equal(write.actor_role, "Commander");
 });
 
-test("POST /api/v1/coa/:coa_id/reject sets status REJECTED and writes an audit entry", async (t) => {
+test("POST /api/v1/coa/:coa_id/approve without a bearer token is rejected with 401", async (t) => {
   const db = createDb(DATABASE_URL);
   const qdrant = createQdrantClient(QDRANT_URL);
-  const { client: auditClient, writes } = fakeAuditClient();
+  const { client: auditClient } = fakeAuditClient();
+  const testAuth = await createTestAuth();
   const app = buildApp({
     db,
     qdrant,
     mode: { kind: "edge", modelPath: "/nonexistent" },
     auditSvcUrl: "http://unused",
     fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
+    logger: false,
+    auditClient,
+  });
+  t.after(async () => {
+    await app.close();
+    await db.$client.end();
+  });
+
+  const row = await insertCoa(db, { situation_id: randomUUID(), options: [VALID_OPTION] });
+  const res = await app.inject({
+    method: "POST",
+    url: `/api/v1/coa/${row.coa_id}/approve`,
+    payload: { option_rank: 1, notes: null },
+  });
+  assert.equal(res.statusCode, 401);
+});
+
+test("POST /api/v1/coa/:coa_id/reject sets status REJECTED and writes an audit entry", async (t) => {
+  const db = createDb(DATABASE_URL);
+  const qdrant = createQdrantClient(QDRANT_URL);
+  const { client: auditClient, writes } = fakeAuditClient();
+  const testAuth = await createTestAuth();
+  const app = buildApp({
+    db,
+    qdrant,
+    mode: { kind: "edge", modelPath: "/nonexistent" },
+    auditSvcUrl: "http://unused",
+    fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
     logger: false,
     auditClient,
   });
@@ -131,7 +206,8 @@ test("POST /api/v1/coa/:coa_id/reject sets status REJECTED and writes an audit e
   const res = await app.inject({
     method: "POST",
     url: `/api/v1/coa/${row.coa_id}/reject`,
-    payload: { reason: "Insufficient asset availability", actor_user_id: "cdr-1", actor_role: "Commander" },
+    payload: { reason: "Insufficient asset availability" },
+    headers: await testAuth.authHeader({ sub: "cdr-1", roles: ["Commander"] }),
   });
 
   assert.equal(res.statusCode, 200);
@@ -147,12 +223,14 @@ test("POST /api/v1/coa/:coa_id/approve on a nonexistent coa_id returns 404", asy
   const db = createDb(DATABASE_URL);
   const qdrant = createQdrantClient(QDRANT_URL);
   const { client: auditClient } = fakeAuditClient();
+  const testAuth = await createTestAuth();
   const app = buildApp({
     db,
     qdrant,
     mode: { kind: "edge", modelPath: "/nonexistent" },
     auditSvcUrl: "http://unused",
     fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
     logger: false,
     auditClient,
   });
@@ -164,7 +242,8 @@ test("POST /api/v1/coa/:coa_id/approve on a nonexistent coa_id returns 404", asy
   const res = await app.inject({
     method: "POST",
     url: "/api/v1/coa/44444444-4444-4444-4444-444444444444/approve",
-    payload: { option_rank: 1, notes: null, actor_user_id: "cdr-1", actor_role: "Commander" },
+    payload: { option_rank: 1, notes: null },
+    headers: await testAuth.authHeader({ sub: "cdr-1", roles: ["Commander"] }),
   });
   assert.equal(res.statusCode, 404);
 });

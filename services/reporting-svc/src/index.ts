@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import pino from "pino";
 import { createDb } from "@vektor/db";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { buildApp } from "./app.js";
 import { runScheduledDispatchTick, createMailer } from "./schedule/scheduler.js";
 
@@ -17,7 +18,7 @@ if (!DATABASE_URL) throw new Error("DATABASE_URL is required");
 
 async function main(): Promise<void> {
   const db = createDb(DATABASE_URL!);
-  const app = buildApp({ db, storageDir: STORAGE_DIR });
+  const app = buildApp({ db, storageDir: STORAGE_DIR, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "reporting-svc HTTP listening");
 

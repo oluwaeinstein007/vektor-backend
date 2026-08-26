@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDb } from "@vektor/db";
+import { createTestAuth } from "@vektor/auth/testing";
 import { createAuditClient } from "../src/audit/client.js";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:vektor@localhost:5433/vektor";
@@ -27,7 +28,8 @@ const AUDIT_SVC_APP_PATH = new URL("../../../audit-svc/dist/src/app.js", import.
 test("createAuditClient().write() round-trips through a real audit-svc HTTP instance", async (t) => {
   const { buildApp } = await import(AUDIT_SVC_APP_PATH);
   const db = createDb(DATABASE_URL);
-  const auditApp = buildApp({ db, logger: false });
+  const { authOptions } = await createTestAuth();
+  const auditApp = buildApp({ db, auth: authOptions, logger: false });
   await auditApp.listen({ port: 0, host: "127.0.0.1" });
   const address = auditApp.server.address();
   if (address === null || typeof address === "string") throw new Error("expected a bound TCP address");

@@ -17,7 +17,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist",
+    "test": "tsc -p tsconfig.test.json && node --test dist-tests/tests/*.test.js",
+    "clean": "rm -rf dist dist-tests",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -27,6 +28,7 @@
     "postgres": "^3.4.5"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "drizzle-kit": "^0.30.1",
     "typescript": "^5.7.2"
   }

@@ -1,7 +1,11 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
+import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
+import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
 import zoneRoutes from "./routes/zones.js";
 import alertRoutes from "./routes/alerts.js";
 
@@ -13,6 +17,7 @@ declare module "fastify" {
 
 export interface BuildAppOptions {
   db: VektorDb;
+  auth: VektorAuthPluginOptions;
   logger?: boolean;
 }
 
@@ -26,6 +31,14 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   app.decorate("db", options.db);
 
   app.register(cors, { origin: true });
+
+  app.register(vektorAuthPlugin, options.auth);
+
+  app.register(fastifySwagger, {
+    openapi: { openapi: "3.1.0", info: { title: "VEKTOR alert-svc API", version: "1.0.0" } },
+    transform: jsonSchemaTransform,
+  });
+  app.register(fastifySwaggerUi, { routePrefix: "/documentation" });
 
   app.get("/healthz", async () => ({ status: "ok" }));
 

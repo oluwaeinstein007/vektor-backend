@@ -1,11 +1,15 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
+import { serializerCompiler, validatorCompiler, jsonSchemaTransform, type ZodTypeProvider } from "fastify-type-provider-zod";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
+import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
 import modelsRoutes from "./routes/models.js";
 import type { DetectionModel } from "./inference/session.js";
 
 export interface BuildAppOptions {
   model: DetectionModel;
   requireGpu: boolean;
+  auth: VektorAuthPluginOptions;
   logger?: boolean;
 }
 
@@ -20,6 +24,14 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.register(vektorAuthPlugin, options.auth);
+
+  app.register(fastifySwagger, {
+    openapi: { openapi: "3.1.0", info: { title: "VEKTOR cv-inference-svc API", version: "1.0.0" } },
+    transform: jsonSchemaTransform,
+  });
+  app.register(fastifySwaggerUi, { routePrefix: "/documentation" });
 
   app.get("/healthz", async () => ({
     status: "ok" as const,

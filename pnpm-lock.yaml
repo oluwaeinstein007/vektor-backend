@@ -158,6 +158,25 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/load-test:
+    dependencies:
+      '@vektor/kafka':
+        specifier: workspace:*
+        version: link:../kafka
+      '@vektor/shared':
+        specifier: workspace:*
+        version: link:../shared
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/qdrant:
     dependencies:
       '@qdrant/js-client-rest':

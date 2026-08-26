@@ -1,12 +1,7 @@
-// §13.1 REST endpoints this service owns:
+// §13.1 REST endpoints this service owns (all Analyst+ per SEC-003):
 //   GET  /api/v1/entities            list active entities (paginated; filter by class, affiliation, bbox)
 //   GET  /api/v1/entities/:id        full entity detail
 //   POST /api/v1/entities/:id/tag    add operator tag
-//
-// Auth (Analyst+ RBAC per §13.1) isn't wired up yet — auth-svc/Keycloak
-// don't exist as a repo dependency this service can call yet. Every handler
-// below is written as if a `request.user` decorator will exist; there's a
-// TODO at the one place that actually needs it once auth-svc lands.
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -60,7 +55,10 @@ const entitiesRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.get(
     "/api/v1/entities",
-    { schema: { querystring: ListEntitiesQuery, response: { 200: ListEntitiesResponse } } },
+    {
+      preHandler: app.requireRole("analyst+"),
+      schema: { querystring: ListEntitiesQuery, response: { 200: ListEntitiesResponse } },
+    },
     async (request) => {
       const { class: classification, affiliation, bbox, page, limit } = request.query;
       const rows = await listEntities(app.db, {
@@ -76,7 +74,10 @@ const entitiesRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.get(
     "/api/v1/entities/:id",
-    { schema: { params: EntityIdParams, response: { 200: Entity, 404: ErrorResponse } } },
+    {
+      preHandler: app.requireRole("analyst+"),
+      schema: { params: EntityIdParams, response: { 200: Entity, 404: ErrorResponse } },
+    },
     async (request, reply) => {
       const entity = await getEntity(app.db, request.params.id);
       if (!entity) return reply.code(404).send({ error: "entity not found" });
@@ -87,6 +88,7 @@ const entitiesRoutes: FastifyPluginAsync = async (app) => {
   typedApp.post(
     "/api/v1/entities/:id/tag",
     {
+      preHandler: app.requireRole("analyst+"),
       schema: {
         params: EntityIdParams,
         body: TagEntityBody,
@@ -94,9 +96,6 @@ const entitiesRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      // TODO(auth-svc): reject here with 403 if request.user's role isn't
-      // Analyst+ (REQ table, §13.1) — no auth middleware exists yet to
-      // populate request.user, so there's nothing to check against.
       const updated = await tagEntity(app.db, request.params.id, request.body.tag);
       if (!updated) return reply.code(404).send({ error: "entity not found" });
       return toWireEntity(updated);

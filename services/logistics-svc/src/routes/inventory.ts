@@ -16,7 +16,7 @@ const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.get(
     "/api/v1/logistics/inventory",
-    { schema: { response: { 200: z.array(InventoryWithForecast) } } },
+    { preHandler: app.requireRole("logistics+"), schema: { response: { 200: z.array(InventoryWithForecast) } } },
     async () => {
       const items = await app.db.select().from(inventoryItems);
       const results = [];

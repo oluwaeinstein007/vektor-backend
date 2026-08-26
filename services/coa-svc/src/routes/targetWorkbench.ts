@@ -19,7 +19,9 @@ const targetWorkbenchRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.get(
     "/api/v1/target-workbench/ranking",
-    { schema: { response: { 200: z.array(RankedEntity) } } },
+    // Not in 07-data-api.md's table (predates this endpoint); Analyst+ by
+    // analogy to /api/v1/entities — same SENSITIVE track data, §14.3.
+    { preHandler: app.requireRole("analyst+"), schema: { response: { 200: z.array(RankedEntity) } } },
     async () => {
       const [entityRows, assetRows] = await Promise.all([
         listActiveEntities(app.db),

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import FormData from "form-data";
+import { createTestAuth, type TestAuth } from "@vektor/auth/testing";
 import { buildApp } from "../src/app.js";
 import { DetectionModel } from "../src/inference/session.js";
 
@@ -17,22 +18,28 @@ const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "tests", "fixtures");
 const YOLOV8N_FIXTURE = join(FIXTURES_DIR, "yolov8n.int8.onnx");
 const GROUND_VEHICLE_FIXTURE = join(FIXTURES_DIR, "synthetic-groundvehicle.int8.onnx");
 
-async function uploadFixture(app: ReturnType<typeof buildApp>, fixturePath: string, filename = "model.onnx") {
+async function uploadFixture(
+  app: ReturnType<typeof buildApp>,
+  testAuth: TestAuth,
+  fixturePath: string,
+  filename = "model.onnx",
+) {
   const form = new FormData();
   form.append("file", await readFile(fixturePath), { filename });
   return app.inject({
     method: "POST",
     url: "/api/v1/models/upload",
     payload: form,
-    headers: form.getHeaders(),
+    headers: { ...form.getHeaders(), ...(await testAuth.authHeader({ sub: "admin-1", roles: ["SuperAdmin"] })) },
   });
 }
 
 test("uploading a real ONNX model hot-swaps the active session", async () => {
   const model = await DetectionModel.load(YOLOV8N_FIXTURE, { requireGpu: false });
-  const app = buildApp({ model, requireGpu: false, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ model, requireGpu: false, auth: testAuth.authOptions, logger: false });
 
-  const res = await uploadFixture(app, GROUND_VEHICLE_FIXTURE);
+  const res = await uploadFixture(app, testAuth, GROUND_VEHICLE_FIXTURE);
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json(), { status: "ok", executionProvider: "cpu" });
 
@@ -50,9 +57,10 @@ test("uploading a real ONNX model hot-swaps the active session", async () => {
 
 test("uploading a non-.onnx filename is rejected with 400", async () => {
   const model = await DetectionModel.load(YOLOV8N_FIXTURE, { requireGpu: false });
-  const app = buildApp({ model, requireGpu: false, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ model, requireGpu: false, auth: testAuth.authOptions, logger: false });
 
-  const res = await uploadFixture(app, YOLOV8N_FIXTURE, "model.txt");
+  const res = await uploadFixture(app, testAuth, YOLOV8N_FIXTURE, "model.txt");
   assert.equal(res.statusCode, 400);
   assert.match(res.json().error, /expected an \.onnx file/);
 
@@ -61,11 +69,17 @@ test("uploading a non-.onnx filename is rejected with 400", async () => {
 
 test("uploading a file that isn't a valid ONNX model is rejected with 400 and the live model is untouched", async () => {
   const model = await DetectionModel.load(YOLOV8N_FIXTURE, { requireGpu: false });
-  const app = buildApp({ model, requireGpu: false, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ model, requireGpu: false, auth: testAuth.authOptions, logger: false });
 
   const form = new FormData();
   form.append("file", Buffer.from("not a real onnx file"), { filename: "bogus.onnx" });
-  const res = await app.inject({ method: "POST", url: "/api/v1/models/upload", payload: form, headers: form.getHeaders() });
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/v1/models/upload",
+    payload: form,
+    headers: { ...form.getHeaders(), ...(await testAuth.authHeader({ sub: "admin-1", roles: ["SuperAdmin"] })) },
+  });
 
   assert.equal(res.statusCode, 400);
   assert.match(res.json().error, /model failed to load/);
@@ -81,7 +95,8 @@ test("uploading a file that isn't a valid ONNX model is rejected with 400 and th
 
 test("GET /healthz reports the active execution provider", async () => {
   const model = await DetectionModel.load(YOLOV8N_FIXTURE, { requireGpu: false });
-  const app = buildApp({ model, requireGpu: false, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ model, requireGpu: false, auth: testAuth.authOptions, logger: false });
 
   const res = await app.inject({ method: "GET", url: "/healthz" });
   assert.equal(res.statusCode, 200);

@@ -36,13 +36,24 @@ const ZoneSummary = z.object({
 const zoneRoutes: FastifyPluginAsync = async (app) => {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  typedApp.get("/api/v1/geofence-zones", { schema: { response: { 200: z.array(ZoneSummary) } } }, async () => {
-    return listZones(app.db);
-  });
+  // Not in 07-data-api.md's table. Viewing zone config is Analyst+ (same bar
+  // as other SENSITIVE track/AOI data, §14.3); creating/deleting a zone
+  // changes what triggers alerts platform-wide, so it's Commander-scoped,
+  // same tier as COA approval.
+  typedApp.get(
+    "/api/v1/geofence-zones",
+    { preHandler: app.requireRole("analyst+"), schema: { response: { 200: z.array(ZoneSummary) } } },
+    async () => {
+      return listZones(app.db);
+    },
+  );
 
   typedApp.post(
     "/api/v1/geofence-zones",
-    { schema: { body: CreateZoneBody, response: { 200: z.object({ zone_id: z.string().uuid() }) } } },
+    {
+      preHandler: app.requireRole("commander"),
+      schema: { body: CreateZoneBody, response: { 200: z.object({ zone_id: z.string().uuid() }) } },
+    },
     async (request) => {
       const zone_id = await createZone(app.db, request.body);
       return { zone_id };
@@ -51,7 +62,10 @@ const zoneRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.delete(
     "/api/v1/geofence-zones/:id",
-    { schema: { params: ZoneIdParams, response: { 204: z.void(), 404: ErrorResponse } } },
+    {
+      preHandler: app.requireRole("commander"),
+      schema: { params: ZoneIdParams, response: { 204: z.void(), 404: ErrorResponse } },
+    },
     async (request, reply) => {
       const deleted = await deleteZone(app.db, request.params.id);
       if (!deleted) return reply.code(404).send({ error: "zone not found" });

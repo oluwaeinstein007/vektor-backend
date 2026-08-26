@@ -1,13 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDb } from "@vektor/db";
+import { createTestAuth } from "@vektor/auth/testing";
 import { buildApp } from "../src/app.js";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:vektor@localhost:5433/vektor";
 
 test("POST /api/v1/audit writes an entry, GET /api/v1/audit retrieves it", async (t) => {
   const db = createDb(DATABASE_URL);
-  const app = buildApp({ db, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ db, auth: testAuth.authOptions, logger: false });
   t.after(async () => {
     await app.close();
     await db.$client.end();
@@ -32,7 +34,11 @@ test("POST /api/v1/audit writes an entry, GET /api/v1/audit retrieves it", async
   assert.equal(written.actor_user_id, marker);
   assert.equal(written.action, "model.upload");
 
-  const readRes = await app.inject({ method: "GET", url: `/api/v1/audit?actor_user_id=${marker}` });
+  const readRes = await app.inject({
+    method: "GET",
+    url: `/api/v1/audit?actor_user_id=${marker}`,
+    headers: await testAuth.authHeader({ sub: "admin-1", roles: ["SuperAdmin"] }),
+  });
   assert.equal(readRes.statusCode, 200);
   const rows = readRes.json();
   assert.equal(rows.length, 1);
@@ -41,7 +47,8 @@ test("POST /api/v1/audit writes an entry, GET /api/v1/audit retrieves it", async
 
 test("GET / lists this service's endpoints", async (t) => {
   const db = createDb(DATABASE_URL);
-  const app = buildApp({ db, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ db, auth: testAuth.authOptions, logger: false });
   t.after(async () => {
     await app.close();
     await db.$client.end();

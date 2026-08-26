@@ -1,6 +1,4 @@
-// 07-data-api.md §13.1 — the three COA REST endpoints, all Commander-scoped
-// (RBAC enforcement itself is auth-svc/gateway's job, not yet built; these
-// routes trust the caller pending SEC-003, same as audit-svc's routes).
+// 07-data-api.md §13.1 — the three COA REST endpoints, all Commander-scoped.
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -14,17 +12,17 @@ const ErrorResponse = z.object({ error: z.string() });
 const SituationIdParams = z.object({ situation_id: z.string().uuid() });
 const CoaIdParams = z.object({ coa_id: z.string().uuid() });
 
+// SEC-003 audit fix: actor_user_id/actor_role used to be caller-supplied
+// body fields — a client could approve a COA as themselves and have the
+// audit log record any actor_role string it liked. Both now come from the
+// verified JWT (request.user, populated by requireRole()) instead.
 const ApproveBody = z.object({
   option_rank: z.number().int().min(1),
   notes: z.string().nullable().default(null),
-  actor_user_id: z.string().min(1),
-  actor_role: z.string().min(1),
 });
 
 const RejectBody = z.object({
   reason: z.string().min(1),
-  actor_user_id: z.string().min(1),
-  actor_role: z.string().min(1),
 });
 
 const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, opts) => {
@@ -32,7 +30,7 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
 
   typedApp.get(
     "/api/v1/coa/:situation_id",
-    { schema: { params: SituationIdParams, response: { 200: z.array(COA) } } },
+    { preHandler: app.requireRole("commander"), schema: { params: SituationIdParams, response: { 200: z.array(COA) } } },
     async (request) => {
       const rows = await listCoasBySituation(app.db, request.params.situation_id);
       return rows.map(toWireCoa);
@@ -44,7 +42,10 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
   // response returns, so "preserved" isn't racing the HTTP response.
   typedApp.post(
     "/api/v1/coa/:coa_id/approve",
-    { schema: { params: CoaIdParams, body: ApproveBody, response: { 200: COA, 404: ErrorResponse } } },
+    {
+      preHandler: app.requireRole("commander"),
+      schema: { params: CoaIdParams, body: ApproveBody, response: { 200: COA, 404: ErrorResponse } },
+    },
     async (request, reply) => {
       const row = await decideCoa(app.db, {
         coa_id: request.params.coa_id,
@@ -55,8 +56,8 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
       if (!row) return reply.code(404).send({ error: "coa not found" });
 
       await opts.auditClient.write({
-        actor_user_id: request.body.actor_user_id,
-        actor_role: request.body.actor_role,
+        actor_user_id: request.user!.sub,
+        actor_role: request.user!.role,
         action: "coa.approve",
         resource_type: "coa",
         resource_id: row.coa_id,
@@ -69,7 +70,10 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
 
   typedApp.post(
     "/api/v1/coa/:coa_id/reject",
-    { schema: { params: CoaIdParams, body: RejectBody, response: { 200: COA, 404: ErrorResponse } } },
+    {
+      preHandler: app.requireRole("commander"),
+      schema: { params: CoaIdParams, body: RejectBody, response: { 200: COA, 404: ErrorResponse } },
+    },
     async (request, reply) => {
       const row = await decideCoa(app.db, {
         coa_id: request.params.coa_id,
@@ -80,8 +84,8 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
       if (!row) return reply.code(404).send({ error: "coa not found" });
 
       await opts.auditClient.write({
-        actor_user_id: request.body.actor_user_id,
-        actor_role: request.body.actor_role,
+        actor_user_id: request.user!.sub,
+        actor_role: request.user!.role,
         action: "coa.reject",
         resource_type: "coa",
         resource_id: row.coa_id,
@@ -98,7 +102,7 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
   // client that has a coa_id without its situation_id (e.g. a deep link).
   typedApp.get(
     "/api/v1/coa/by-id/:coa_id",
-    { schema: { params: CoaIdParams, response: { 200: COA, 404: ErrorResponse } } },
+    { preHandler: app.requireRole("commander"), schema: { params: CoaIdParams, response: { 200: COA, 404: ErrorResponse } } },
     async (request, reply) => {
       const row = await getCoaById(app.db, request.params.coa_id);
       if (!row) return reply.code(404).send({ error: "coa not found" });

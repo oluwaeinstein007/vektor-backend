@@ -50,6 +50,13 @@
       "when": 1787685631102,
       "tag": "0006_pretty_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787709107424,
+      "tag": "0007_whole_alice",
+      "breakpoints": true
     }
   ]
 }

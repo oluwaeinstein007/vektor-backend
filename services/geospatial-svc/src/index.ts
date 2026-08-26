@@ -1,4 +1,5 @@
 import { createDb } from "@vektor/db";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { buildApp } from "./app.js";
 
 const PORT = Number(process.env.PORT ?? 3005);
@@ -9,7 +10,7 @@ if (!DATABASE_URL) {
 }
 
 const db = createDb(DATABASE_URL);
-const app = buildApp({ db });
+const app = buildApp({ db, auth: authOptionsFromEnv() });
 
 app
   .listen({ port: PORT, host: "0.0.0.0" })

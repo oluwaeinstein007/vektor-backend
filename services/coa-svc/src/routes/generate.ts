@@ -31,7 +31,9 @@ const generateRoutes: FastifyPluginAsync<{
 
   typedApp.post(
     "/api/v1/coa/generate",
-    { schema: { body: GenerateBody, response: { 200: COA, 404: ErrorResponse } } },
+    // Not in 07-data-api.md's table (see file header); Analyst+ by analogy
+    // to the rest of this service's Commander/Analyst+ split.
+    { preHandler: app.requireRole("analyst+"), schema: { body: GenerateBody, response: { 200: COA, 404: ErrorResponse } } },
     async (request, reply) => {
       const targetRow = await getEntityById(app.db, request.body.target_entity_id);
       if (!targetRow) return reply.code(404).send({ error: "target entity not found" });

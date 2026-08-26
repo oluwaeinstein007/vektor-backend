@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createDb, inventoryItems, inventoryForecasts } from "@vektor/db";
+import { createTestAuth } from "@vektor/auth/testing";
 import { buildApp } from "../src/app.js";
 import { createRoutingClient, ensureRoutingSchema } from "../src/routing/client.js";
 import { seedGrid, DEFAULT_GRID, nodeId } from "../src/routing/seedNetwork.js";
@@ -16,11 +17,13 @@ const ROUTING_DATABASE_URL = process.env.ROUTING_DATABASE_URL ?? "postgres://pos
 test("GET /api/v1/logistics/inventory returns items joined with their forecast", async (t) => {
   const db = createDb(DATABASE_URL);
   const routingSql = createRoutingClient(ROUTING_DATABASE_URL);
-  const app = buildApp({ db, routingSql, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ db, routingSql, auth: testAuth.authOptions, logger: false });
   t.after(() => app.close());
   t.after(() => routingSql.end());
   t.after(() => db.$client.end());
 
+  const logisticsHeader = await testAuth.authHeader({ sub: "log-1", roles: ["Logistics Officer"] });
   const itemId = randomUUID();
   await db.insert(inventoryItems).values({
     item_id: itemId,
@@ -41,7 +44,7 @@ test("GET /api/v1/logistics/inventory returns items joined with their forecast",
   });
 
   try {
-    const res = await app.inject({ method: "GET", url: "/api/v1/logistics/inventory" });
+    const res = await app.inject({ method: "GET", url: "/api/v1/logistics/inventory", headers: logisticsHeader });
     assert.equal(res.statusCode, 200);
     const body = res.json() as Array<{ item: { item_id: string }; forecast: { low_stock: boolean } | null }>;
     const mine = body.find((r) => r.item.item_id === itemId);
@@ -58,16 +61,25 @@ test("POST /api/v1/logistics/route computes a path, and blocking an edge changes
   const routingSql = createRoutingClient(ROUTING_DATABASE_URL);
   await ensureRoutingSchema(routingSql);
   await seedGrid(routingSql);
-  const app = buildApp({ db, routingSql, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ db, routingSql, auth: testAuth.authOptions, logger: false });
   t.after(() => app.close());
   t.after(() => routingSql.end());
   t.after(() => db.$client.end());
+
+  const logisticsHeader = await testAuth.authHeader({ sub: "log-1", roles: ["Logistics Officer"] });
+  const analystHeader = await testAuth.authHeader({ sub: "analyst-1", roles: ["Analyst"] });
 
   const { originLon, originLat, spacingDeg, size } = DEFAULT_GRID;
   const start = { lat: originLat, lon: originLon };
   const end = { lat: originLat, lon: originLon + spacingDeg };
 
-  const before = await app.inject({ method: "POST", url: "/api/v1/logistics/route", payload: { start, end } });
+  const before = await app.inject({
+    method: "POST",
+    url: "/api/v1/logistics/route",
+    payload: { start, end },
+    headers: logisticsHeader,
+  });
   assert.equal(before.statusCode, 200);
   const beforeBody = before.json() as { path: unknown[]; distance_m: number };
   assert.equal(beforeBody.path.length, 2);
@@ -80,10 +92,16 @@ test("POST /api/v1/logistics/route computes a path, and blocking an edge changes
     method: "POST",
     url: `/api/v1/logistics/road-edges/${edgeRow!.id}/block`,
     payload: { blocked: true },
+    headers: analystHeader,
   });
   assert.equal(blockRes.statusCode, 200);
 
-  const after = await app.inject({ method: "POST", url: "/api/v1/logistics/route", payload: { start, end } });
+  const after = await app.inject({
+    method: "POST",
+    url: "/api/v1/logistics/route",
+    payload: { start, end },
+    headers: logisticsHeader,
+  });
   const afterBody = after.json() as { path: unknown[]; distance_m: number; avoided_edge_ids: number[] };
   assert.ok(afterBody.path.length > 2);
   assert.ok(afterBody.avoided_edge_ids.includes(edgeRow!.id));
@@ -92,6 +110,7 @@ test("POST /api/v1/logistics/route computes a path, and blocking an edge changes
     method: "POST",
     url: "/api/v1/logistics/road-edges/999999/block",
     payload: { blocked: true },
+    headers: analystHeader,
   });
   assert.equal(notFound.statusCode, 404);
 });

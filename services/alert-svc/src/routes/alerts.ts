@@ -13,7 +13,6 @@ const AlertIdParams = z.object({ id: z.string().uuid() });
 
 const ActionBody = z.object({
   action: z.enum(["ACKNOWLEDGE", "ESCALATE", "DISMISS"]),
-  operator_id: z.string().min(1),
 });
 
 function toWireAlert(row: {
@@ -39,20 +38,35 @@ function toWireAlert(row: {
 const alertRoutes: FastifyPluginAsync = async (app) => {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  typedApp.get("/api/v1/alerts", { schema: { response: { 200: z.array(Alert) } } }, async () => {
-    const rows = await listAlerts(app.db);
-    return rows.map(toWireAlert);
-  });
+  // 07-data-api.md §13.1: "All roles" — any authenticated user can view the
+  // triage queue (§14.3 SENSITIVE data still requires *auth*, just not a
+  // minimum role above that).
+  typedApp.get(
+    "/api/v1/alerts",
+    { preHandler: app.requireRole("all"), schema: { response: { 200: z.array(Alert) } } },
+    async () => {
+      const rows = await listAlerts(app.db);
+      return rows.map(toWireAlert);
+    },
+  );
 
   typedApp.post(
     "/api/v1/alerts/:id/actions",
-    { schema: { params: AlertIdParams, body: ActionBody, response: { 200: Alert, 404: ErrorResponse } } },
+    {
+      // §13.1 lists only /ack as Analyst+; ESCALATE/DISMISS are broader than
+      // the PRD's literal endpoint but carry the same or higher stakes, so
+      // the whole action set is held to the same Analyst+ bar.
+      preHandler: app.requireRole("analyst+"),
+      schema: { params: AlertIdParams, body: ActionBody, response: { 200: Alert, 404: ErrorResponse } },
+    },
     async (request, reply) => {
+      // SEC-003 audit fix: operator_id used to be a client-supplied body
+      // field (spoofable); it's now the verified JWT subject.
       const row = await applyAlertAction(
         app.db,
         request.params.id,
         request.body.action as AlertActionType,
-        request.body.operator_id,
+        request.user!.sub,
       );
       if (!row) return reply.code(404).send({ error: "alert not found" });
       return toWireAlert(row);

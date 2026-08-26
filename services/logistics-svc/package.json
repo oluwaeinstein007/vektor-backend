@@ -15,6 +15,9 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
+    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger-ui": "^5.1.0",
+    "@vektor/auth": "workspace:*",
     "@vektor/db": "workspace:*",
     "@vektor/kafka": "workspace:*",
     "@vektor/shared": "workspace:*",

@@ -16,7 +16,10 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
+    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger-ui": "^5.1.0",
     "@grpc/grpc-js": "^1.12.2",
+    "@vektor/auth": "workspace:*",
     "@vektor/db": "workspace:*",
     "@vektor/qdrant": "workspace:*",
     "@vektor/shared": "workspace:*",

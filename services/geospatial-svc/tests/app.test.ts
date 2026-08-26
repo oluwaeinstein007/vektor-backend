@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { createDb, type VektorDb } from "@vektor/db";
+import { createTestAuth } from "@vektor/auth/testing";
 import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 
@@ -18,11 +19,17 @@ if (!DATABASE_URL) {
 
 let db: VektorDb;
 let app: FastifyInstance;
+// SEC-003: every /api/v1/entities route now requires Analyst+ — a real
+// RS256-signed token (see @vektor/auth/testing), not a bypass, so these
+// tests exercise the exact same verification path production traffic does.
+let analystAuthHeader: { authorization: string };
 
 before(async () => {
   db = createDb(DATABASE_URL!);
-  app = buildApp({ db, logger: false });
+  const testAuth = await createTestAuth();
+  app = buildApp({ db, auth: testAuth.authOptions, logger: false });
   await app.ready();
+  analystAuthHeader = await testAuth.authHeader({ sub: "analyst-1", roles: ["Analyst"] });
 });
 
 after(async () => {
@@ -83,7 +90,7 @@ test("GET /api/v1/entities lists active entities", async () => {
   await insertEntity();
   await insertEntity({ status: "ARCHIVED" }); // must not appear — SVC-005 lists ACTIVE only
 
-  const res = await app.inject({ method: "GET", url: "/api/v1/entities" });
+  const res = await app.inject({ method: "GET", url: "/api/v1/entities", headers: analystAuthHeader });
   assert.equal(res.statusCode, 200);
   const body = res.json();
   assert.equal(body.data.length, 1);
@@ -96,6 +103,7 @@ test("GET /api/v1/entities filters by affiliation", async () => {
   const res = await app.inject({
     method: "GET",
     url: "/api/v1/entities?affiliation=HOSTILE",
+    headers: analystAuthHeader,
   });
   const body = res.json();
   assert.equal(body.data.length, 1);
@@ -109,6 +117,7 @@ test("GET /api/v1/entities filters by bbox — the real ST_Contains path", async
   const res = await app.inject({
     method: "GET",
     url: "/api/v1/entities?bbox=-123,37,-122,38", // roughly the SF Bay Area
+    headers: analystAuthHeader,
   });
   assert.equal(res.statusCode, 200);
   const body = res.json();
@@ -119,7 +128,7 @@ test("GET /api/v1/entities filters by bbox — the real ST_Contains path", async
 test("GET /api/v1/entities/:id returns the full canonical Entity shape", async () => {
   const id = await insertEntity({ lon: -122.42, lat: 37.77, source_sensors: ["drone-7", "ais-1"] });
 
-  const res = await app.inject({ method: "GET", url: `/api/v1/entities/${id}` });
+  const res = await app.inject({ method: "GET", url: `/api/v1/entities/${id}`, headers: analystAuthHeader });
   assert.equal(res.statusCode, 200);
   const entity = res.json();
 
@@ -141,13 +150,31 @@ test("GET /api/v1/entities/:id returns 404 for an unknown id", async () => {
   const res = await app.inject({
     method: "GET",
     url: `/api/v1/entities/${randomUUID()}`,
+    headers: analystAuthHeader,
   });
   assert.equal(res.statusCode, 404);
 });
 
 test("GET /api/v1/entities/:id rejects a non-uuid id with 400", async () => {
-  const res = await app.inject({ method: "GET", url: "/api/v1/entities/not-a-uuid" });
+  const res = await app.inject({ method: "GET", url: "/api/v1/entities/not-a-uuid", headers: analystAuthHeader });
   assert.equal(res.statusCode, 400);
+});
+
+test("SEC-003: GET /api/v1/entities without a bearer token is rejected with 401", async () => {
+  const res = await app.inject({ method: "GET", url: "/api/v1/entities" });
+  assert.equal(res.statusCode, 401);
+});
+
+test("SEC-003: GET /api/v1/entities with a Viewer token (below Analyst+) is rejected with 403", async () => {
+  const testAuth = await createTestAuth();
+  // Deliberately a *different* keypair's app to prove the check is on
+  // role, not just "any valid token" — this app only trusts its own JWKS.
+  const viewerOnlyApp = buildApp({ db, auth: testAuth.authOptions, logger: false });
+  await viewerOnlyApp.ready();
+  const viewerHeader = await testAuth.authHeader({ sub: "viewer-1", roles: ["Viewer"] });
+  const res = await viewerOnlyApp.inject({ method: "GET", url: "/api/v1/entities", headers: viewerHeader });
+  assert.equal(res.statusCode, 403);
+  await viewerOnlyApp.close();
 });
 
 test("POST /api/v1/entities/:id/tag adds a tag and is idempotent", async () => {
@@ -157,6 +184,7 @@ test("POST /api/v1/entities/:id/tag adds a tag and is idempotent", async () => {
     method: "POST",
     url: `/api/v1/entities/${id}/tag`,
     payload: { tag: "high-priority" },
+    headers: analystAuthHeader,
   });
   assert.equal(first.statusCode, 200);
   assert.deepEqual(first.json().metadata.tags, ["high-priority"]);
@@ -166,6 +194,7 @@ test("POST /api/v1/entities/:id/tag adds a tag and is idempotent", async () => {
     method: "POST",
     url: `/api/v1/entities/${id}/tag`,
     payload: { tag: "high-priority" },
+    headers: analystAuthHeader,
   });
   assert.deepEqual(second.json().metadata.tags, ["high-priority"]);
 });
@@ -175,6 +204,7 @@ test("POST /api/v1/entities/:id/tag returns 404 for an unknown id", async () => 
     method: "POST",
     url: `/api/v1/entities/${randomUUID()}/tag`,
     payload: { tag: "x" },
+    headers: analystAuthHeader,
   });
   assert.equal(res.statusCode, 404);
 });

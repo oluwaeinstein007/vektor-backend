@@ -1,5 +1,6 @@
 import pino from "pino";
 import { createKafkaClient, type VektorEnv } from "@vektor/kafka";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { DetectionModel } from "./inference/session.js";
 import { runFrameConsumer } from "./kafka/processFrames.js";
 import { buildApp } from "./app.js";
@@ -22,7 +23,7 @@ async function main(): Promise<void> {
   const model = await DetectionModel.load(MODEL_PATH!, { requireGpu: REQUIRE_GPU });
   logger.info({ modelPath: MODEL_PATH, executionProvider: model.executionProvider }, "model loaded");
 
-  const app = buildApp({ model, requireGpu: REQUIRE_GPU });
+  const app = buildApp({ model, requireGpu: REQUIRE_GPU, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "cv-inference-svc HTTP (health + hot-swap) listening");
 
