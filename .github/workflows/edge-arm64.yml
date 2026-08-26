@@ -10,7 +10,7 @@
 # same gap vektor-edge's own CI documents for the Jetson itself
 # (tests/hardware-in-the-loop/README.md).
 #
-# NOTE: no general vektor-platform CI workflow exists yet (INFRA-008 is
+# NOTE: no general vektor-backend CI workflow exists yet (INFRA-008 is
 # still open across this repo) — this job is scoped narrowly to what
 # EDGE-002/EDGE-003 need, not a substitute for that.
 name: edge-arm64-build
@@ -37,14 +37,14 @@ jobs:
       matrix:
         service: [cv-inference-svc, coa-svc, edge-sync-svc]
     steps:
-      # Both Dockerfiles COPY vektor-proto/ + vektor-platform/ as siblings
+      # Both Dockerfiles COPY vektor-proto/ + vektor-backend/ as siblings
       # (see services/cv-inference-svc/Dockerfile's header comment for why —
       # the cross-repo `link:../../../vektor-proto` dependency needs that
       # exact relative layout), so this checks out both repos into one
       # workspace root rather than just this one.
       - uses: actions/checkout@v4
         with:
-          path: vektor-platform
+          path: vektor-backend
       - uses: actions/checkout@v4
         with:
           repository: oluwaeinstein007/vektor-proto
@@ -56,7 +56,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: vektor-platform/services/${{ matrix.service }}/Dockerfile
+          file: vektor-backend/services/${{ matrix.service }}/Dockerfile
           platforms: linux/arm64
           push: false
           tags: vektor/${{ matrix.service }}:edge-arm64-ci

@@ -1,21 +1,23 @@
-# vektor-platform
+# vektor-backend
 
-All TypeScript apps and microservices for [VEKTOR](../vektor-docs/VEKTOR-PRD.md) — see PRD §9.2 and §9.6 for the full repository layout this maps to.
+All TypeScript microservices and shared backend packages for [VEKTOR](../vektor-docs/VEKTOR-PRD.md) — see PRD §9.2 and §9.6 for the full repository layout this maps to. The frontend (`apps/web`, and eventually `apps/field-pwa`) lives in the sibling [`vektor-web`](../vektor-web) repo, which consumes `packages/shared` from here via a cross-repo `link:` dependency — see that package's `package.json`.
 
 ## Layout
 
 ```
-apps/            Next.js web dashboard, field PWA, API gateway plugins   (Phase 1+, not yet scaffolded)
-services/        ingest-svc, cv-inference-svc, fusion-svc, coa-svc, ...  (Phase 1+, not yet scaffolded)
+services/        ingest-svc, geospatial-svc, map-tile-server, cv-inference-svc, fusion-svc,
+                  coa-svc, audit-svc, alert-svc, logistics-svc, reporting-svc, edge-sync-svc
 packages/
   config/        Shared TypeScript, ESLint, and Prettier config
-  shared/        Re-exports @vektor/proto — no service imports the contract repo directly
+  shared/        Re-exports @vektor/proto — no service imports the contract repo directly.
+                 Also consumed cross-repo by vektor-web/apps/web via a link: dependency.
   db/            Drizzle ORM schema (PostgreSQL + PostGIS + TimescaleDB)
   kafka/         kafkajs client factory + topic-naming helper + re-exported event schemas
-  ui/            Shared React components (shadcn/ui base)
+  redis/         Redis client factory (event-time watermark windows, BullMQ, etc.)
+  qdrant/        BGE-M3 embeddings + Qdrant doctrine store
+  auth/          Auth/session utilities
+  load-test/     Load-testing scripts
 ```
-
-`apps/` and `services/` are intentionally empty right now — this repo currently covers Phase 0 (INFRA-002: Turborepo + pnpm workspace init, shared package scaffolding). Each service/app is scaffolded by its own roadmap task (see `../vektor-docs/docs/09-roadmap.md`) as its Phase comes up.
 
 ## Local development
 
@@ -23,7 +25,7 @@ packages/
 
 ```bash
 cd ../vektor-proto && pnpm build
-cd ../vektor-platform && pnpm install
+cd ../vektor-backend && pnpm install
 pnpm build
 ```
 

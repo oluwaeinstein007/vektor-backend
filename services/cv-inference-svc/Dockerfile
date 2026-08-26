@@ -29,25 +29,25 @@ ENV PNPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=60000
 WORKDIR /workspace
 
 COPY vektor-proto/ ./vektor-proto/
-COPY vektor-platform/ ./vektor-platform/
+COPY vektor-backend/ ./vektor-backend/
 
 WORKDIR /workspace/vektor-proto
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --no-frozen-lockfile && pnpm run build
 
-WORKDIR /workspace/vektor-platform
+WORKDIR /workspace/vektor-backend
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --no-frozen-lockfile
 RUN pnpm --filter=@vektor/cv-inference-svc... build
 
 FROM node:22-bookworm-slim AS runtime
-LABEL org.opencontainers.image.source="vektor-platform/services/cv-inference-svc"
+LABEL org.opencontainers.image.source="vektor-backend/services/cv-inference-svc"
 RUN corepack enable
 WORKDIR /workspace
 COPY --from=build /workspace/vektor-proto ./vektor-proto/
-COPY --from=build /workspace/vektor-platform ./vektor-platform/
+COPY --from=build /workspace/vektor-backend ./vektor-backend/
 ENV NODE_ENV=production
 ENV VEKTOR_PROFILE=edge
-WORKDIR /workspace/vektor-platform/services/cv-inference-svc
+WORKDIR /workspace/vektor-backend/services/cv-inference-svc
 EXPOSE 3006
 CMD ["node", "dist/src/index.js"]
