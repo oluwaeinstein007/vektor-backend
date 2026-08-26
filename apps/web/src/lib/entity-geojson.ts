@@ -1,5 +1,5 @@
 import type { Entity } from "@vektor/shared";
-import { AFFILIATION_COLORS, AFFILIATION_FRAME, classifyEntity } from "./entity-symbols";
+import { AFFILIATION_COLORS, AFFILIATION_FRAME, classifyEntity } from "./entity-symbols.ts";
 
 export { AFFILIATION_COLORS };
 
