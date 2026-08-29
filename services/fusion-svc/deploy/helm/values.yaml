@@ -1,0 +1,61 @@
+# See README.md in this directory for what's genuinely wired up vs. still a
+# placeholder (no CI currently builds/publishes an image for this service —
+# same gap documented for every vektor-backend service except
+# cv-inference-svc/coa-svc/edge-sync-svc's edge-arm64 builds).
+replicaCount: 1
+
+image:
+  repository: ghcr.io/oluwaeinstein007/vektor-fusion-svc
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3007
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Non-secret config, read directly by src/index.ts (process.env.*).
+env:
+  VEKTOR_ENV: production
+  KAFKA_BROKERS: "vektor-kafka:9092"
+  REDIS_URL: "redis://vektor-redis:6379"
+  POLL_BLOCK_MS: "500"
+  WATERMARK_MS: "500"
+
+# DATABASE_URL contains a password, so it's the one value this chart
+# expects from an operator-managed Secret rather than plaintext in
+# values.yaml — see templates/deployment.yaml's envFrom. Create it with:
+#   kubectl create secret generic fusion-svc-db --from-literal=DATABASE_URL=postgres://...
+existingSecret: fusion-svc-db
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

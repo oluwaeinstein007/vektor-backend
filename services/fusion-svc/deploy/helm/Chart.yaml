@@ -1,0 +1,9 @@
+apiVersion: v2
+name: fusion-svc
+description: >-
+  VEKTOR fusion-svc (SVC-007-011): Kafka/Redis-Streams data fusion engine,
+  Extended Kalman Filter tracking, blue-force/no-strike zones, and the
+  Socket.io gateway apps/web consumes for live entity updates.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

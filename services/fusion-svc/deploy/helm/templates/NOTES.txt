@@ -1,0 +1,7 @@
+fusion-svc deployed as {{ include "fusion-svc.fullname" . }} in {{ .Release.Namespace }}.
+
+REST + Socket.io gateway: kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "fusion-svc.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+Health check: GET /healthz
+
+Requires a Secret named "{{ .Values.existingSecret }}" with a DATABASE_URL key
+to already exist in this namespace (this chart does not create it).
