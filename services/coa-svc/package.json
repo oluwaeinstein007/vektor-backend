@@ -23,7 +23,7 @@
     "@vektor/db": "workspace:*",
     "@vektor/qdrant": "workspace:*",
     "@vektor/shared": "workspace:*",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.2.0",
     "fastify-type-provider-zod": "^4.0.2",
     "mgrs": "^2.1.0",
