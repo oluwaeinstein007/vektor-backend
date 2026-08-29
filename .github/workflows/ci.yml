@@ -1,0 +1,179 @@
+# INFRA-008: this repo had no general CI at all before this — only
+# edge-arm64.yml, scoped narrowly to 3 edge-profile services (see that
+# file's own header comment). Every command below was verified for real
+# against real infra in a sandbox before being written here, not
+# transcribed from README examples: `pnpm turbo run test` genuinely drops
+# custom env vars unless `--env-mode=loose` is passed (turbo's default
+# strict env mode; confirmed by reproducing the failure and fixing it) —
+# every job below needs that flag or DATABASE_URL/KAFKA_BROKERS/etc. never
+# reach the actual test process despite being set at the job/step level.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  build-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      # vektor-backend's packages/shared depends on the sibling vektor-proto
+      # repo via `link:../../../vektor-proto` — checked out at a matching
+      # relative depth, same pattern edge-arm64.yml's Dockerfile builds use.
+      - uses: actions/checkout@v4
+        with:
+          path: vektor-backend
+      - uses: actions/checkout@v4
+        with:
+          repository: oluwaeinstein007/vektor-proto
+          path: vektor-proto
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install protoc (vektor-proto's codegen:ts needs a real binary on PATH)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends protobuf-compiler
+
+      - name: Build vektor-proto (dist/ and src/generated/ are both gitignored there)
+        working-directory: vektor-proto
+        run: pnpm install --frozen-lockfile && pnpm codegen:ts && pnpm build
+
+      - name: Install vektor-backend
+        working-directory: vektor-backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (all 20 workspace packages)
+        working-directory: vektor-backend
+        run: pnpm build
+
+      - name: Lint (typecheck, all 24 workspace tasks)
+        working-directory: vektor-backend
+        run: pnpm lint
+
+  # Runs the subset of services/packages whose test suites only need
+  # Postgres+PostGIS, Kafka, Redis, Maildev, MediaMTX, and Mosquitto — all
+  # standard images, no exotic multi-container setup. Deliberately excludes
+  # (still a real, documented gap, not silently skipped):
+  #   - coa-svc: needs a live Qdrant + BGE-M3 embeddings + a stand-in gRPC
+  #     LLM server, and its edge-mode tests need a ~469MB GGUF fixture that
+  #     isn't committed to the repo (see the Git LFS note added alongside
+  #     this workflow).
+  #   - logistics-svc: needs 3 separate Postgres instances (one running the
+  #     pgRouting extension image, one standing in for an ERP with logical
+  #     replication enabled) plus a full Debezium/Kafka Connect stack.
+  #   - reporting-svc: needs real headless Chrome (puppeteer-core against a
+  #     system Chrome binary) for PDF generation.
+  #   - packages/auth: its RBAC tests need a live Keycloak realm — this
+  #     sandbox happened to have one already configured (see ADR-0008), but
+  #     that's a local coincidence, not something to assume in generic CI.
+  #   - packages/qdrant, packages/load-test: not yet wired into any CI job.
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_PASSWORD: vektor
+          POSTGRES_DB: vektor
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["16379:6379"]
+      maildev:
+        image: maildev/maildev
+        ports: ["1025:1025", "1080:1080"]
+      mediamtx:
+        image: bluenviron/mediamtx:latest
+        ports: ["8554:8554"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: vektor-backend
+      - uses: actions/checkout@v4
+        with:
+          repository: oluwaeinstein007/vektor-proto
+          path: vektor-proto
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install protoc
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends protobuf-compiler
+
+      - name: Build vektor-proto
+        working-directory: vektor-proto
+        run: pnpm install --frozen-lockfile && pnpm codegen:ts && pnpm build
+
+      - name: Install vektor-backend
+        working-directory: vektor-backend
+        run: pnpm install --frozen-lockfile
+
+      # Kafka has no first-class `services:` container image with the
+      # single-node KRaft env vars this project standardizes on (see
+      # vektor-build-conventions), so it's started by hand rather than as a
+      # `services:` entry — exact same apache/kafka:3.9.0 config every
+      # service's own README already documents for local dev.
+      - name: Start Kafka (KRaft, single node)
+        run: |
+          docker run -d --name ci-kafka -p 19092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:3.9.0
+          sleep 8
+
+      # Mosquitto's default image requires an explicit config to allow
+      # anonymous connections — same as every local-dev README in this repo.
+      - name: Start Mosquitto
+        run: |
+          mkdir -p /tmp/ci-mosquitto && printf 'listener 1883\nallow_anonymous true\n' > /tmp/ci-mosquitto/mosquitto.conf
+          docker run -d --name ci-mosquitto -p 11883:1883 -v /tmp/ci-mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2
+
+      # ingest-svc's RTSP test needs an actual stream arriving at MediaMTX,
+      # not just the server itself — publish a synthetic source in the
+      # background, same as this project's own local-dev instructions
+      # (`-rtsp_transport tcp`: UDP RTSP sessions time out in a bridged
+      # Docker network, see vektor-build-conventions). 320x240 matches
+      # ingest.test.ts's own hardcoded expected frame dimensions exactly.
+      - name: Publish a synthetic RTSP test stream
+        run: |
+          ffmpeg -stream_loop -1 -re -f lavfi -i testsrc=size=320x240:rate=15 -f rtsp -rtsp_transport tcp rtsp://localhost:8554/testcam > /tmp/ffmpeg-publish.log 2>&1 &
+          sleep 3
+
+      - name: Test
+        working-directory: vektor-backend
+        env:
+          DATABASE_URL: postgres://postgres:vektor@localhost:5433/vektor
+          KAFKA_BROKERS: localhost:19092
+          REDIS_URL: redis://localhost:16379
+          MAILDEV_SMTP_URL: smtp://localhost:1025
+          MAILDEV_API_URL: http://localhost:1080
+          SMTP_URL: smtp://localhost:1025
+          SMTP_FROM: alerts@vektor.test
+          INGEST_SOURCE_URL: rtsp://localhost:8554/testcam
+          RTSP_SENSOR_ID: test-cam-1
+          RTSP_TRANSPORT: tcp
+          MQTT_BROKER_URL: mqtt://localhost:11883
+          MQTT_TOPIC_FILTER: "vektor/sensors/#"
+          MQTT_SENSOR_ID: test-iot-1
+        # --env-mode=loose: see this file's header comment.
+        run: |
+          pnpm turbo run test --env-mode=loose \
+            --filter=@vektor/db --filter=@vektor/redis --filter=@vektor/kafka --filter=@vektor/shared \
+            --filter=@vektor/geospatial-svc --filter=@vektor/fusion-svc --filter=@vektor/audit-svc \
+            --filter=@vektor/alert-svc --filter=@vektor/edge-sync-svc --filter=@vektor/cv-inference-svc \
+            --filter=@vektor/ingest-svc

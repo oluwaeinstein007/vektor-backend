@@ -10,9 +10,9 @@
 # same gap vektor-edge's own CI documents for the Jetson itself
 # (tests/hardware-in-the-loop/README.md).
 #
-# NOTE: no general vektor-backend CI workflow exists yet (INFRA-008 is
-# still open across this repo) — this job is scoped narrowly to what
-# EDGE-002/EDGE-003 need, not a substitute for that.
+# NOTE: see ci.yml for the general build/lint/test workflow (added to close
+# most of INFRA-008's gap in this repo) — this job stays separate since it
+# specifically cross-compiles for ARM64 under QEMU, which ci.yml doesn't.
 name: edge-arm64-build
 
 on:
