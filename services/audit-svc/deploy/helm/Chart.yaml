@@ -1,0 +1,7 @@
+apiVersion: v2
+name: audit-svc
+description: >-
+  VEKTOR audit-svc (SVC-013): append-only audit log for COA approval/reject and every other requireRole()-gated write action.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

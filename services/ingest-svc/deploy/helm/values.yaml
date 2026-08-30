@@ -1,0 +1,46 @@
+# See README.md in this directory for what's genuinely wired up vs. still a
+# placeholder.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/oluwaeinstein007/vektor-ingest-svc
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Non-secret config, read directly by src/index.ts (process.env.*).
+env:
+  VEKTOR_ENV: "production"
+  KAFKA_BROKERS: "vektor-kafka:9092"
+  INGEST_SOURCE_URL: "rtsp://change-me:8554/cam1"
+  RTSP_SENSOR_ID: "cam-1"
+  RTSP_TRANSPORT: "tcp"
+  AIS_HOST: ""
+  AIS_PORT: ""
+  AIS_SENSOR_ID: ""
+  ADSB_HOST: ""
+  ADSB_PORT: ""
+  ADSB_SENSOR_ID: ""
+  MQTT_BROKER_URL: ""
+  MQTT_TOPIC_FILTER: "vektor/sensors/#"
+  MQTT_SENSOR_ID: ""
+  GEOTIFF_INBOX_DIR: "/data/geotiff-inbox"
+  GEOTIFF_SENSOR_ID: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

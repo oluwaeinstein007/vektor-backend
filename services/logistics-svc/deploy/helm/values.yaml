@@ -1,0 +1,54 @@
+# See README.md in this directory for what's genuinely wired up vs. still a
+# placeholder.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/oluwaeinstein007/vektor-logistics-svc
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3014
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Non-secret config, read directly by src/index.ts (process.env.*).
+env:
+  KAFKA_BROKERS: "vektor-kafka:9092"
+
+# DATABASE_URL, ROUTING_DATABASE_URL contain credentials, so this chart expects them
+# from an operator-managed Secret rather than plaintext in values.yaml:
+#   kubectl create secret generic logistics-svc-db --from-literal=DATABASE_URL=... --from-literal=ROUTING_DATABASE_URL=...
+existingSecret: logistics-svc-db
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

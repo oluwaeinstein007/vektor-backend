@@ -1,0 +1,7 @@
+apiVersion: v2
+name: map-tile-server
+description: >-
+  VEKTOR map-tile-server (SVC-006): PMTiles static file server for apps/web's MapLibre base map and offline edge map packs.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

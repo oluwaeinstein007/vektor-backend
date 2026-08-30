@@ -1,0 +1,6 @@
+coa-svc deployed as {{ include "coa-svc.fullname" . }} in {{ .Release.Namespace }}.
+
+kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "coa-svc.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+Health check: GET /healthz
+
+Requires a Secret named "{{ .Values.existingSecret }}" (keys: DATABASE_URL) to already exist in this namespace (this chart does not create it).

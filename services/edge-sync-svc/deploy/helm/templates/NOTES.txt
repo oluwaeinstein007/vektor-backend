@@ -1,0 +1,4 @@
+edge-sync-svc deployed as {{ include "edge-sync-svc.fullname" . }} in {{ .Release.Namespace }}.
+
+kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "edge-sync-svc.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+Health check: GET /healthz

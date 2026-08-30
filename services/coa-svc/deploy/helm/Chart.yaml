@@ -1,0 +1,7 @@
+apiVersion: v2
+name: coa-svc
+description: >-
+  VEKTOR coa-svc (ML-009/010/011, SVC-012/013): Target Workbench threat scoring, RAG-grounded COA generation, approval workflow.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

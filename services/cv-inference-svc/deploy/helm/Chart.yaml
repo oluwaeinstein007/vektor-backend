@@ -1,0 +1,7 @@
+apiVersion: v2
+name: cv-inference-svc
+description: >-
+  VEKTOR cv-inference-svc (ML-002/003): onnxruntime-node YOLOv8 inference + DeepSORT tracking over Kafka video frames.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

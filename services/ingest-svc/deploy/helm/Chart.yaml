@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ingest-svc
+description: >-
+  VEKTOR ingest-svc (SVC-001/002/003): RTSP/SRT video, GeoTIFF/SAR, AIS, ADS-B, and MQTT IoT adapters, publishing to Kafka.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

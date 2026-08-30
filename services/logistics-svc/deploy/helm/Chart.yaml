@@ -1,0 +1,7 @@
+apiVersion: v2
+name: logistics-svc
+description: >-
+  VEKTOR logistics-svc (SVC-017/018/019): ERP CDC ingestion, supply forecasting, pgRouting-based route optimization.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,6 @@
+alert-svc deployed as {{ include "alert-svc.fullname" . }} in {{ .Release.Namespace }}.
+
+kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "alert-svc.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+Health check: GET /healthz
+
+Requires a Secret named "{{ .Values.existingSecret }}" (keys: DATABASE_URL, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) to already exist in this namespace (this chart does not create it).

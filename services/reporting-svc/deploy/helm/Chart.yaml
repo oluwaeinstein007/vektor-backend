@@ -1,0 +1,7 @@
+apiVersion: v2
+name: reporting-svc
+description: >-
+  VEKTOR reporting-svc (SVC-020): PDF/PPTX situation report generation, cron-scheduled dispatch, CSV/GeoJSON export.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

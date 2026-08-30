@@ -1,0 +1,4 @@
+ingest-svc deployed as {{ include "ingest-svc.fullname" . }} in {{ .Release.Namespace }}.
+
+This service has no HTTP server/health endpoint (a Kafka producer/adapter
+process, not a REST API) - no Service resource is created for it.

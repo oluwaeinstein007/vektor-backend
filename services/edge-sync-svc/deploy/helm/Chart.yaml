@@ -1,0 +1,7 @@
+apiVersion: v2
+name: edge-sync-svc
+description: >-
+  VEKTOR edge-sync-svc (EDGE-005/006): persisted-offset Kafka delta sync + offline alert-triage intake queue for edge nodes.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

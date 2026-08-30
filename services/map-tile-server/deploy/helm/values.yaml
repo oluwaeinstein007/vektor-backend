@@ -1,0 +1,49 @@
+# See README.md in this directory for what's genuinely wired up vs. still a
+# placeholder.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/oluwaeinstein007/vektor-map-tile-server
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3008
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Non-secret config, read directly by src/index.ts (process.env.*).
+env:
+  TILES_DIR: "/data/tiles"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

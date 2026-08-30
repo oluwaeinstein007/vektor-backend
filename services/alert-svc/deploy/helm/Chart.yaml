@@ -1,0 +1,7 @@
+apiVersion: v2
+name: alert-svc
+description: >-
+  VEKTOR alert-svc (SVC-014/015/016): geofence engine, EWMA anomaly detection, multi-channel alert dispatch (email/SMS/webhook).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
