@@ -10,6 +10,7 @@ import { startAisAdapter } from "./ais/aisAdapter.js";
 import { startAdsbAdapter } from "./adsb/adsbAdapter.js";
 import { startMqttAdapter } from "./mqtt/mqttAdapter.js";
 import { watchGeoTiffInbox } from "./geotiff/watchInbox.js";
+import { buildFieldIngestApp } from "./http/app.js";
 
 const logger = pino({ name: "ingest-svc" });
 
@@ -118,11 +119,30 @@ function startGeoTiffWatcher(): boolean {
   return true;
 }
 
+async function startFieldIngestHttp(): Promise<boolean> {
+  const secret = process.env.FIELD_DEVICE_SHARED_SECRET;
+  if (!secret) return false;
+
+  const port = Number(process.env.FIELD_INGEST_PORT ?? 3011);
+  const app = buildFieldIngestApp({ producer, env: VEKTOR_ENV, deviceSharedSecret: secret });
+  await app.listen({ port, host: "0.0.0.0" });
+  stopFns.push(() => app.close());
+  logger.info({ port }, "field ingest HTTP server started");
+  return true;
+}
+
 async function main(): Promise<void> {
   await producer.connect();
   logger.info("connected to Kafka");
 
-  const started = [startRtspAdapter(), startAisFeed(), startAdsbFeed(), startMqttFeed(), startGeoTiffWatcher()];
+  const started = [
+    startRtspAdapter(),
+    startAisFeed(),
+    startAdsbFeed(),
+    startMqttFeed(),
+    startGeoTiffWatcher(),
+    await startFieldIngestHttp(),
+  ];
 
   if (!started.some(Boolean)) {
     throw new Error(
@@ -131,7 +151,8 @@ async function main(): Promise<void> {
         "AIS (AIS_HOST + AIS_PORT + AIS_SENSOR_ID), " +
         "ADS-B (ADSB_HOST + ADSB_PORT + ADSB_SENSOR_ID), " +
         "MQTT (MQTT_BROKER_URL + MQTT_TOPIC_FILTER + MQTT_SENSOR_ID), " +
-        "GeoTIFF (GEOTIFF_INBOX_DIR + GEOTIFF_SENSOR_ID)",
+        "GeoTIFF (GEOTIFF_INBOX_DIR + GEOTIFF_SENSOR_ID), " +
+        "Field ingest HTTP (FIELD_DEVICE_SHARED_SECRET, optionally FIELD_INGEST_PORT)",
     );
   }
 }

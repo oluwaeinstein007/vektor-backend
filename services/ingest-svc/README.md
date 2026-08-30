@@ -9,6 +9,7 @@ Phase 1 ingestion: one process, five independently-enabled adapters, sharing one
 | AIS | SVC-003 (REQ-1.5) | `AIS_HOST`, `AIS_PORT`, `AIS_SENSOR_ID` | `{env}.vektor.ais.position` |
 | ADS-B (SBS-1) | SVC-003 (REQ-1.5) | `ADSB_HOST`, `ADSB_PORT`, `ADSB_SENSOR_ID` | `{env}.vektor.adsb.position` |
 | MQTT IoT | SVC-003 (REQ-1.5) | `MQTT_BROKER_URL`, `MQTT_TOPIC_FILTER`, `MQTT_SENSOR_ID` | `{env}.vektor.iot.telemetry` |
+| Field ingest HTTP (phone GPS/gyro) | new, not in the original roadmap phases | `FIELD_DEVICE_SHARED_SECRET`, optionally `FIELD_INGEST_PORT` (default 3011) | `{env}.vektor.iot.telemetry` |
 
 Plus `KAFKA_BROKERS` (default `localhost:9092`) and `VEKTOR_ENV` (default `dev`) shared by all adapters.
 
@@ -23,6 +24,8 @@ Also carries the sensor_ts validation half of SVC-004 (`@vektor/kafka`'s `assert
 **ADS-B** parses the SBS-1 (BaseStation) CSV format emitted by dump1090-class receivers on TCP port 30003 — a text adapter, not a Mode S/RF decoder (`src/adsb/sbs1Parser.ts`).
 
 **MQTT** subscribes to a topic filter and republishes every JSON payload as an `IotTelemetryEvent`, passed through rather than normalized to a per-device schema (`src/mqtt/mqttAdapter.ts`).
+
+**Field ingest HTTP** (`src/http/app.ts`) is this service's first-ever HTTP surface — a browser-based `field-pwa` client (an operator's own phone, see `vektor-web/apps/field-pwa`) can't publish to MQTT directly, so `POST /api/v1/field/telemetry` gives it an HTTP equivalent of the MQTT adapter's republish-as-`IotTelemetryEvent` path, landing on the *same* `iot.telemetry` topic rather than a new one. The JSON body (lat/lon/alt/GPS accuracy/heading/pitch/roll/battery) is wrapped as `{device_class: "phone", ...}` inside `IotTelemetryEvent.payload` — `fusion-svc`'s `fromIot()` recognizes this alongside a MAVLink-sourced payload (`mavlink-bridge`) via that same discriminator, so no new fusion domain was needed either. Requests need an `X-Vektor-Device-Key` header matching `FIELD_DEVICE_SHARED_SECRET` — one shared secret for every field device, a deliberate stopgap short of per-device keys or full Keycloak auth (documented in `src/http/app.ts`'s header comment); this only gates writes on what's meant to be a local/demo network.
 
 ## Local development
 

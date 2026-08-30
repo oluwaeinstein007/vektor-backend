@@ -22,6 +22,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test dist-tests/tests/*.test.js",
+    "dev:auth-bridge": "tsc -p tsconfig.json && node dist/dev-auth-bridge.js",
     "clean": "rm -rf dist dist-tests"
   },
   "dependencies": {

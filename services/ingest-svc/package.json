@@ -14,13 +14,17 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
     "@vektor/kafka": "workspace:*",
     "@vektor/shared": "workspace:*",
+    "fastify": "^5.2.0",
+    "fastify-type-provider-zod": "^4.0.2",
     "fluent-ffmpeg": "^2.1.3",
     "geotiff": "^3.0.5",
     "kafkajs": "^2.2.4",
     "mqtt": "^5.15.2",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.28",
