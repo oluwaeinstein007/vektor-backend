@@ -55,6 +55,7 @@ const DEFAULT_GATE_METERS: Record<string, number> = {
   ais: 1500,
   adsb: 3000,
   ewrf: 8000, // RF geolocation is inherently much less precise than a GPS-derived fix
+  iot: 300, // direct GPS-derived MAVLink telemetry — tightest gate of any domain
 };
 const DEFAULT_GATE_METERS_FALLBACK = 2000;
 const MAX_TRAJECTORY_POINTS = 200;

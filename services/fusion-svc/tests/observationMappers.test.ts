@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fromAis, fromAdsb, fromEwRf } from "../src/pipeline/observationMappers.js";
-import type { AisPositionReport, AdsbPositionReport, EwRfEmission } from "@vektor/shared";
+import { fromAis, fromAdsb, fromEwRf, fromIot } from "../src/pipeline/observationMappers.js";
+import type { AisPositionReport, AdsbPositionReport, EwRfEmission, IotTelemetryEvent } from "@vektor/shared";
 
 test("fromAis always produces an observation (Class A reports always carry a fix)", () => {
   const event: AisPositionReport = {
@@ -100,4 +100,59 @@ test("fromEwRf produces a low-confidence observation when a triangulated estimat
   assert.ok(obs);
   assert.equal(obs.classification, "RadarType.Search");
   assert.ok(obs.confidence < 0.5, "single-receiver RF geolocation should be low-confidence");
+});
+
+function iotEvent(payload: Record<string, unknown>): IotTelemetryEvent {
+  return {
+    event_id: "00000000-0000-0000-0000-000000000006",
+    sensor_id: "iot-1",
+    mqtt_topic: "test/topic",
+    payload,
+    sensor_ts: "2026-01-01T00:00:00.000Z",
+    kafka_ts: "2026-01-01T00:00:00.100Z",
+  };
+}
+
+test("fromIot returns null for a payload shape it doesn't recognize", () => {
+  assert.equal(fromIot(iotEvent({ device_class: "some-unknown-sensor", foo: "bar" })), null);
+});
+
+test("fromIot recognizes a MAVLink-sourced payload as a friendly UAS track", () => {
+  const obs = fromIot(
+    iotEvent({
+      device_class: "mavlink",
+      system_id: 1,
+      lat: 10,
+      lon: 20,
+      alt_m: 100,
+      heading_deg: 90,
+      groundspeed_mps: 5,
+    }),
+  );
+  assert.ok(obs);
+  assert.equal(obs.domain, "iot");
+  assert.equal(obs.classification, "UAS.MAVLink");
+  assert.equal(obs.affiliation, "FRIENDLY");
+  assert.deepEqual(obs.position, { lat: 10, lon: 20, alt_m: 100 });
+});
+
+test("fromIot recognizes a field-pwa phone payload as a friendly field-operator track", () => {
+  const obs = fromIot(
+    iotEvent({
+      device_class: "phone",
+      lat: 30.0444,
+      lon: 31.2357,
+      alt_m: 42,
+      gps_accuracy_m: 8.5,
+      heading_deg: 270.5,
+      pitch_deg: 1.2,
+      roll_deg: -0.4,
+      battery_pct: 87,
+    }),
+  );
+  assert.ok(obs);
+  assert.equal(obs.domain, "iot");
+  assert.equal(obs.classification, "Personnel.FieldOperator");
+  assert.equal(obs.affiliation, "FRIENDLY");
+  assert.deepEqual(obs.position, { lat: 30.0444, lon: 31.2357, alt_m: 42 });
 });

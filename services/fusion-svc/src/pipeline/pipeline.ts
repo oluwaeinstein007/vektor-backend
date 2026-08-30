@@ -9,10 +9,16 @@ import type { Producer } from "kafkajs";
 import type { WatermarkWindow } from "@vektor/redis";
 import type { VektorDb } from "@vektor/db";
 import type { VektorEnv } from "@vektor/kafka";
-import { AisPositionReport, AdsbPositionReport, EwRfEmission, type GeofenceCheckJob } from "@vektor/shared";
+import {
+  AisPositionReport,
+  AdsbPositionReport,
+  EwRfEmission,
+  IotTelemetryEvent,
+  type GeofenceCheckJob,
+} from "@vektor/shared";
 import { TrackManager, type TrackObservation } from "./trackManager.js";
 import { ExtendedKalmanFilter } from "../ekf/extendedKalmanFilter.js";
-import { fromAis, fromAdsb, fromEwRf } from "./observationMappers.js";
+import { fromAis, fromAdsb, fromEwRf, fromIot } from "./observationMappers.js";
 import { mapToEntity } from "../ontology/mapToEntity.js";
 import { isInNoStrikeZone } from "../blueforce/queries.js";
 import { upsertEntity } from "../db/upsertEntity.js";
@@ -28,6 +34,8 @@ function toObservation(domain: string, payload: unknown): TrackObservation | nul
       return fromAdsb(AdsbPositionReport.parse(payload));
     case "ewrf":
       return fromEwRf(EwRfEmission.parse(payload));
+    case "iot":
+      return fromIot(IotTelemetryEvent.parse(payload));
     default:
       // "detection" (CV tracks) — no real-world position to correlate on yet, see observationMappers.ts.
       return null;

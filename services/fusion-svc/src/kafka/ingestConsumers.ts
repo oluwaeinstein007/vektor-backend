@@ -17,9 +17,16 @@ import type { Consumer } from "kafkajs";
 import type { Redis } from "@vektor/redis";
 import { publishToStream } from "@vektor/redis";
 import { topicName, type VektorEnv } from "@vektor/kafka";
-import { DetectionEvent, AisPositionReport, AdsbPositionReport, EwRfEmission, type SensorHealth } from "@vektor/shared";
+import {
+  DetectionEvent,
+  AisPositionReport,
+  AdsbPositionReport,
+  EwRfEmission,
+  IotTelemetryEvent,
+  type SensorHealth,
+} from "@vektor/shared";
 
-export const FUSION_DOMAINS = ["detection", "ais", "adsb", "ewrf"] as const;
+export const FUSION_DOMAINS = ["detection", "ais", "adsb", "ewrf", "iot"] as const;
 export type FusionDomain = (typeof FUSION_DOMAINS)[number];
 
 const SCHEMAS = {
@@ -27,6 +34,7 @@ const SCHEMAS = {
   ais: AisPositionReport,
   adsb: AdsbPositionReport,
   ewrf: EwRfEmission,
+  iot: IotTelemetryEvent,
 } as const;
 
 const TOPIC_ACTIONS: Record<FusionDomain, string> = {
@@ -34,6 +42,7 @@ const TOPIC_ACTIONS: Record<FusionDomain, string> = {
   ais: "position",
   adsb: "position",
   ewrf: "emission",
+  iot: "telemetry",
 };
 
 export interface IngestConsumersOptions {

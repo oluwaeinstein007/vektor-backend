@@ -1,0 +1,26 @@
+{
+  "name": "@vektor/mavlink-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bridges a MAVLink telemetry source (SITL or a real flight controller/companion computer) to MQTT as a device_class:\"mavlink\" JSON payload, on the topic ingest-svc's mqttAdapter already consumes.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/tests/*.test.js",
+    "start": "node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vektor/shared": "workspace:*",
+    "mqtt": "^5.15.2",
+    "node-mavlink": "^2.3.0",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
