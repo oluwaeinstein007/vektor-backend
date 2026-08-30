@@ -59,8 +59,24 @@ function readInt(bits: string, offset: number, length: number): number {
 }
 
 export function decodeAivdmPositionReport(sentence: string): DecodedAisPosition | null {
-  const trimmed = sentence.trim();
-  if (!trimmed.startsWith("!AIVDM") && !trimmed.startsWith("!AIVDO")) return null;
+  let trimmed = sentence.trim();
+
+  // Some real-world shore/base-station AIS networks (e.g. Kystverket's
+  // public feed) prefix each sentence with an IEC 61162-1 NMEA tag block —
+  // \s:<station>,c:<unix_ts>*<checksum>\ — before the actual !--VDM
+  // sentence. Strip it if present; the metadata it carries isn't needed
+  // here (sensor_ts is stamped at receipt instead).
+  if (trimmed.startsWith("\\")) {
+    const tagBlockEnd = trimmed.indexOf("\\", 1);
+    if (tagBlockEnd === -1) return null;
+    trimmed = trimmed.slice(tagBlockEnd + 1);
+  }
+
+  // The 2-char talker ID between "!" and "VDM"/"VDO" varies by source —
+  // "AI" for an independent AIS station, but shore-based networks commonly
+  // use others (Kystverket's feed uses "BS"/"B2"). Any talker ID is valid
+  // per the NMEA spec; only the sentence formatter ("VDM"/"VDO") matters.
+  if (!/^![A-Za-z]{2}VD[MO],/.test(trimmed)) return null;
 
   const fields = trimmed.split("*")[0]?.split(",");
   if (!fields || fields.length < 6) return null;
