@@ -23,7 +23,7 @@ on:
       - "services/edge-sync-svc/**"
       - "packages/**"
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "services/cv-inference-svc/**"
       - "services/coa-svc/**"
