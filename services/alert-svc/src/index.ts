@@ -12,7 +12,10 @@ const logger = pino({ name: "alert-svc" });
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const DATABASE_URL = process.env.DATABASE_URL;
-const PORT = Number(process.env.PORT ?? 3009);
+// 3009 is audit-svc's default (see AUDIT_SVC_URL's own default, coa-svc's
+// README, and vektor-edge's docker-compose.edge.yml, none of which this
+// port should collide with) — this was a real, pre-existing collision.
+const PORT = Number(process.env.PORT ?? 3013);
 const SMTP_URL = process.env.SMTP_URL ?? "smtp://localhost:1025";
 const SMTP_FROM = process.env.SMTP_FROM ?? "alerts@vektor.local";
 const TWILIO_BASE_URL = process.env.TWILIO_BASE_URL ?? "https://api.twilio.com";

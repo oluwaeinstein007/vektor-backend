@@ -10,7 +10,9 @@ const logger = pino({ name: "edge-sync-svc" });
 const KAFKA_BROKERS = process.env.KAFKA_BROKERS ?? "localhost:9092";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const VEKTOR_ENV = (process.env.VEKTOR_ENV ?? "dev") as VektorEnv;
-const ALERT_SVC_URL = process.env.ALERT_SVC_URL ?? "http://localhost:3011";
+// Was defaulting to 3011, which is reporting-svc's port, not alert-svc's
+// (3013) — a real, pre-existing bug, not just a stale comment.
+const ALERT_SVC_URL = process.env.ALERT_SVC_URL ?? "http://localhost:3013";
 const PORT = Number(process.env.PORT ?? 3012);
 // Each physical edge node needs its own group so two Jetsons don't split
 // one node's delta between them — see README.md.

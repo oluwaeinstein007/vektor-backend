@@ -13,7 +13,8 @@ const logger = pino({ name: "logistics-svc" });
 const DATABASE_URL = process.env.DATABASE_URL;
 const ROUTING_DATABASE_URL = process.env.ROUTING_DATABASE_URL;
 const KAFKA_BROKERS = process.env.KAFKA_BROKERS ?? "localhost:9092";
-const PORT = Number(process.env.PORT ?? 3010);
+// 3010 is coa-svc's default — this was a real, pre-existing collision.
+const PORT = Number(process.env.PORT ?? 3014);
 const FORECAST_INTERVAL_MS = Number(process.env.FORECAST_INTERVAL_MS ?? 15 * 60 * 1000); // REQ-6.1: every 15 min
 const LEAD_TIME_HOURS = Number(process.env.LOW_STOCK_LEAD_TIME_HOURS ?? 24);
 
