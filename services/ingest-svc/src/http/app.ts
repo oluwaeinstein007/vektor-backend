@@ -7,14 +7,28 @@
 // MavlinkTelemetryPayload — both are recognized by fusion-svc's fromIot()
 // via payload.device_class, so no fusion-svc change is needed for the
 // topic/domain wiring itself, only for recognizing this new payload shape.
+//
+// /api/v1/field/snapshot (optional, secondary capture mode alongside
+// telemetry) is a fallback for a phone/browser with no RTSP app installed —
+// getUserMedia() + periodic canvas capture in field-pwa, POSTed here as raw
+// JPEG bytes. Deliberately published onto the SAME video.frame topic
+// RTSP's frameExtractor.ts uses (via the same publishFrame() helper, not a
+// separate topic/schema) so it shows up in the dashboard's existing camera
+// panel with zero new frontend code — "a camera feed" is one concept
+// regardless of whether the source is a dedicated RTSP app or a browser
+// tab. It's a fallback, not the primary path: mobile browsers throttle
+// camera access hard once a tab backgrounds/the screen locks, so IP Webcam
+// (a real app, continuous RTSP, feeds cv-inference-svc for real detection)
+// stays the recommended route for anything long-running.
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { Producer } from "kafkajs";
-import { assertValidSensorTs, topicName, type VektorEnv } from "@vektor/kafka";
+import { assertValidSensorTs, topicName, SensorTimestampError, type VektorEnv } from "@vektor/kafka";
 import { IotTelemetryEvent, FieldPhoneTelemetryPayload } from "@vektor/shared";
+import { publishFrame, UnparsableFrameError } from "../kafka/publishFrame.js";
 
 const FieldTelemetryBody = z.object({
   device_id: z.string().min(1),
@@ -63,6 +77,13 @@ export function buildFieldIngestApp(options: FieldIngestAppOptions): FastifyInst
   app.setSerializerCompiler(serializerCompiler);
 
   app.register(cors, { origin: true });
+
+  // image/jpeg has no business going through Fastify's default JSON body
+  // parser — this registers a raw-Buffer pass-through, same shape as any
+  // "accept a binary upload" Fastify recipe.
+  app.addContentTypeParser("image/jpeg", { parseAs: "buffer" }, (_request, payload, done) => {
+    done(null, payload);
+  });
 
   app.get("/healthz", async () => ({ status: "ok" }));
 
@@ -115,6 +136,53 @@ export function buildFieldIngestApp(options: FieldIngestAppOptions): FastifyInst
 
       options.onPublished?.(event);
       return reply.code(202).send({ status: "accepted" as const, event_id: event.event_id });
+    },
+  );
+
+  // publishFrame() (SVC-001's own dimension-parsing + VideoFrameMetadata +
+  // Kafka-publish logic) expects an ExtractedFrame, not an HTTP request —
+  // that shape needs a running frame counter, which RTSP's ffmpeg pipe
+  // tracks internally; this endpoint has no equivalent, so it keeps its own
+  // per-device_id counter across requests.
+  const snapshotFrameNumbers = new Map<string, number>();
+
+  app.post(
+    "/api/v1/field/snapshot",
+    {
+      preHandler: requireDeviceKey(options.deviceSharedSecret),
+      schema: { response: { 202: AcceptedResponse, 400: ErrorResponse, 401: ErrorResponse } },
+    },
+    async (request, reply) => {
+      const deviceId = request.headers["x-vektor-device-id"];
+      if (typeof deviceId !== "string" || deviceId.length === 0) {
+        return reply.code(400).send({ error: "missing X-Vektor-Device-Id header" });
+      }
+      if (!Buffer.isBuffer(request.body)) {
+        return reply.code(400).send({ error: "expected a raw image/jpeg body" });
+      }
+
+      const capturedAtHeader = request.headers["x-vektor-captured-at"];
+      const capturedAt = typeof capturedAtHeader === "string" ? new Date(capturedAtHeader) : new Date();
+      if (Number.isNaN(capturedAt.getTime())) {
+        return reply.code(400).send({ error: "X-Vektor-Captured-At is not a valid date" });
+      }
+
+      const frameNumber = (snapshotFrameNumbers.get(deviceId) ?? 0) + 1;
+      snapshotFrameNumbers.set(deviceId, frameNumber);
+
+      try {
+        await publishFrame(
+          { buffer: request.body, frameNumber, capturedAt },
+          { producer: options.producer, env: options.env, sensorId: deviceId },
+        );
+      } catch (err) {
+        if (err instanceof UnparsableFrameError || err instanceof SensorTimestampError) {
+          return reply.code(400).send({ error: err.message });
+        }
+        throw err;
+      }
+
+      return reply.code(202).send({ status: "accepted" as const, event_id: randomUUID() });
     },
   );
 
