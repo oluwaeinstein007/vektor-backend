@@ -5,6 +5,7 @@ import { createDb } from "@vektor/db";
 import { buildApp } from "./app.js";
 import { FusionGateway } from "./socket/gateway.js";
 import { runIngestConsumers, FUSION_DOMAINS } from "./kafka/ingestConsumers.js";
+import { runVideoFrameConsumer } from "./kafka/videoFrameConsumer.js";
 import { runPipelineOnce, createTrackManager } from "./pipeline/pipeline.js";
 import { createGeofenceCheckQueue } from "./queue/geofenceProducer.js";
 
@@ -17,6 +18,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const PORT = Number(process.env.PORT ?? 3007);
 const WATERMARK_MS = Number(process.env.WATERMARK_MS ?? 500); // Pitfall 1 (§17)
 const POLL_BLOCK_MS = Number(process.env.POLL_BLOCK_MS ?? 1000);
+const VIDEO_FRAME_MIN_INTERVAL_MS = Number(process.env.VIDEO_FRAME_MIN_INTERVAL_MS ?? 750);
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -28,6 +30,13 @@ async function main(): Promise<void> {
   const kafka = createKafkaClient({ clientId: "fusion-svc", brokers: KAFKA_BROKERS.split(",") });
   const consumer = kafka.consumer({ groupId: "fusion-svc" });
   await consumer.connect();
+
+  // Own Consumer instance: a single kafkajs Consumer can only run one
+  // eachMessage handler, and this topic's raw-bytes messages need a
+  // different decode path than the JSON domains ingestConsumers.ts handles
+  // (see videoFrameConsumer.ts's header comment).
+  const videoFrameConsumer = kafka.consumer({ groupId: "fusion-svc-video-frame" });
+  await videoFrameConsumer.connect();
 
   const app = buildApp({ db });
   await app.listen({ port: PORT, host: "0.0.0.0" });
@@ -44,6 +53,22 @@ async function main(): Promise<void> {
     env: VEKTOR_ENV,
     onSensorHealth: (health) => gateway.emitSensorStatus(health),
     onError: (domain, err) => logger.warn({ domain, err }, "failed to ingest event"),
+  });
+
+  const videoFramePromise = runVideoFrameConsumer({
+    consumer: videoFrameConsumer,
+    env: VEKTOR_ENV,
+    minIntervalMs: VIDEO_FRAME_MIN_INTERVAL_MS,
+    onFrame: (frame) =>
+      gateway.emitVideoFrame({
+        sensor_id: frame.sensorId,
+        jpeg_base64: frame.jpegBase64,
+        frame_number: frame.frameNumber,
+        width: frame.width,
+        height: frame.height,
+        captured_at: frame.capturedAt,
+      }),
+    onError: (err) => logger.warn({ err }, "failed to relay video frame"),
   });
 
   const window = new WatermarkWindow(redis, [...FUSION_DOMAINS], WATERMARK_MS);
@@ -75,6 +100,7 @@ async function main(): Promise<void> {
     await app.close();
     await gateway.close();
     await consumer.disconnect();
+    await videoFrameConsumer.disconnect();
     await geofenceQueue.close();
     await entityTopicProducer.disconnect();
     redis.disconnect();
@@ -85,7 +111,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));
 
-  await ingestPromise;
+  await Promise.all([ingestPromise, videoFramePromise]);
 }
 
 main().catch((err: unknown) => {

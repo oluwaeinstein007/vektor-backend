@@ -15,7 +15,7 @@
 // implementation behind it.
 import type { Server as HttpServer } from "node:http";
 import { Server as SocketIOServer, type Socket } from "socket.io";
-import { Entity, EntityUpdatedEvent, EntityLostEvent, SensorHealth, BoundingBox, type Position } from "@vektor/shared";
+import { Entity, EntityUpdatedEvent, EntityLostEvent, SensorHealth, BoundingBox, VideoFrameSocketEvent, type Position } from "@vektor/shared";
 
 function withinBbox(position: Position, bbox: BoundingBox): boolean {
   return (
@@ -89,6 +89,13 @@ export class FusionGateway {
   // is a documented interpretation, not a spec transcription.
   emitSensorStatus(health: SensorHealth): void {
     this.io.emit("sensor:status", SensorHealth.parse(health));
+  }
+
+  // Not AOI-scoped, same reasoning as sensor:status above — a live camera
+  // panel is a fixed dashboard element an operator watches regardless of
+  // map viewport, not a per-position stream tied to what's currently framed.
+  emitVideoFrame(frame: VideoFrameSocketEvent): void {
+    this.io.emit("video:frame", VideoFrameSocketEvent.parse(frame));
   }
 
   /** Number of currently-connected sockets with an active AOI subscription — exposed for tests/metrics, not part of the wire contract. */
