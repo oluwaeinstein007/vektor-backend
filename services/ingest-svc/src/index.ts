@@ -6,6 +6,7 @@
 import pino from "pino";
 import { createKafkaClient, type VektorEnv } from "@vektor/kafka";
 import { runIngest } from "./app.js";
+import type { FrameRotation } from "./rtsp/frameExtractor.js";
 import { startAisAdapter } from "./ais/aisAdapter.js";
 import { startAdsbAdapter } from "./adsb/adsbAdapter.js";
 import { startMqttAdapter } from "./mqtt/mqttAdapter.js";
@@ -21,15 +22,27 @@ const kafka = createKafkaClient({ clientId: "ingest-svc", brokers: KAFKA_BROKERS
 const producer = kafka.producer();
 const stopFns: Array<() => void | Promise<void>> = [];
 
+const VALID_ROTATIONS = new Set(["90cw", "90ccw", "180"]);
+
+function parseRotation(raw: string | undefined): FrameRotation | undefined {
+  if (!raw) return undefined;
+  if (!VALID_ROTATIONS.has(raw)) {
+    throw new Error(`RTSP_ROTATION must be one of ${[...VALID_ROTATIONS].join(", ")} — got "${raw}"`);
+  }
+  return raw as FrameRotation;
+}
+
 function startRtspAdapter(): boolean {
   const sourceUrl = process.env.INGEST_SOURCE_URL;
   const sensorId = process.env.RTSP_SENSOR_ID ?? process.env.SENSOR_ID;
   if (!sourceUrl || !sensorId) return false;
 
+  const rotation = parseRotation(process.env.RTSP_ROTATION);
   let framesPublished = 0;
   const handle = runIngest({
     sourceUrl,
     rtspTransport: process.env.RTSP_TRANSPORT as "tcp" | "udp" | undefined,
+    rotation,
     producer,
     env: VEKTOR_ENV,
     sensorId,
@@ -42,7 +55,7 @@ function startRtspAdapter(): boolean {
     logger.info({ framesPublished }, "stopping rtsp adapter");
     handle.stop();
   });
-  logger.info({ sourceUrl, sensorId }, "rtsp adapter started");
+  logger.info({ sourceUrl, sensorId, rotation }, "rtsp adapter started");
   return true;
 }
 

@@ -5,12 +5,18 @@
 // handlers wired up.
 import type { Producer } from "kafkajs";
 import type { VektorEnv } from "@vektor/kafka";
-import { extractFrames, type ExtractedFrame, type FrameExtractorHandle } from "./rtsp/frameExtractor.js";
+import {
+  extractFrames,
+  type ExtractedFrame,
+  type FrameExtractorHandle,
+  type FrameRotation,
+} from "./rtsp/frameExtractor.js";
 import { publishFrame } from "./kafka/publishFrame.js";
 
 export interface RunIngestOptions {
   sourceUrl: string;
   rtspTransport?: "tcp" | "udp";
+  rotation?: FrameRotation;
   producer: Producer;
   env: VektorEnv;
   sensorId: string;
@@ -20,7 +26,7 @@ export interface RunIngestOptions {
 
 export function runIngest(options: RunIngestOptions): FrameExtractorHandle {
   return extractFrames(
-    { sourceUrl: options.sourceUrl, rtspTransport: options.rtspTransport },
+    { sourceUrl: options.sourceUrl, rtspTransport: options.rtspTransport, rotation: options.rotation },
     (frame) => {
       // Fire-and-forget per frame rather than awaiting inside the `data`
       // handler: blocking here would apply backpressure straight to the

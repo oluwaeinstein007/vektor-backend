@@ -4,7 +4,7 @@ Phase 1 ingestion: one process, five independently-enabled adapters, sharing one
 
 | Adapter | Task | Env vars | Topic |
 |---|---|---|---|
-| RTSP/SRT FMV | SVC-001 (REQ-1.1) | `INGEST_SOURCE_URL`, `RTSP_SENSOR_ID` (or `SENSOR_ID`), `RTSP_TRANSPORT` | `{env}.vektor.video.frame` |
+| RTSP/SRT FMV | SVC-001 (REQ-1.1) | `INGEST_SOURCE_URL`, `RTSP_SENSOR_ID` (or `SENSOR_ID`), `RTSP_TRANSPORT`, `RTSP_ROTATION` | `{env}.vektor.video.frame` |
 | GeoTIFF/SAR inbox | SVC-002 (REQ-1.2) | `GEOTIFF_INBOX_DIR`, `GEOTIFF_SENSOR_ID` | `{env}.vektor.imagery.ingested` |
 | AIS | SVC-003 (REQ-1.5) | `AIS_HOST`, `AIS_PORT`, `AIS_SENSOR_ID` | `{env}.vektor.ais.position` |
 | ADS-B (SBS-1) | SVC-003 (REQ-1.5) | `ADSB_HOST`, `ADSB_PORT`, `ADSB_SENSOR_ID` | `{env}.vektor.adsb.position` |
@@ -15,7 +15,7 @@ Plus `KAFKA_BROKERS` (default `localhost:9092`) and `VEKTOR_ENV` (default `dev`)
 
 Also carries the sensor_ts validation half of SVC-004 (`@vektor/kafka`'s `assertValidSensorTs`) — every adapter validates through it before publishing. The NTP/PTP clock-sync daemon itself (SVC-004's other half) is host/infra configuration (chrony/ptp4l), not application code, and isn't part of this repo.
 
-**RTSP/SRT** extracts individual JPEG frames from ffmpeg's MJPEG pipe output and publishes JPEG bytes as the raw Kafka message value with a `VideoFrameMetadata` header envelope — see `src/rtsp/frameExtractor.ts`.
+**RTSP/SRT** extracts individual JPEG frames from ffmpeg's MJPEG pipe output and publishes JPEG bytes as the raw Kafka message value with a `VideoFrameMetadata` header envelope — see `src/rtsp/frameExtractor.ts`. `RTSP_ROTATION` (`90cw` | `90ccw` | `180`, optional) corrects sensor-orientation-only sources at ingest time via ffmpeg's `transpose` filter — found necessary testing against a real phone (IP Webcam): its RTSP output carries no rotation flag, so frames arrive sideways relative to how the phone was held, which silently tanks downstream CV detection accuracy (a sideways frame that scored 0 YOLOv8 detections scored 89.5% confidence on the same content once rotated). This is a per-sensor deployment setting, not something cv-inference-svc can infer.
 
 **GeoTIFF/SAR** parses georeferencing (bbox, CRS, dimensions) via `geotiff` (pure JS — the PRD's originally specified `gdal-async` isn't installable in this sandbox; see `src/geotiff/ingestGeoTiff.ts`'s header comment) and watches a drop directory for new files (`src/geotiff/watchInbox.ts`).
 

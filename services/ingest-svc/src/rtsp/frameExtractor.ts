@@ -15,12 +15,37 @@ export interface ExtractedFrame {
   capturedAt: Date;
 }
 
+export type FrameRotation = "90cw" | "90ccw" | "180";
+
 export interface FrameExtractorOptions {
   sourceUrl: string;
   // RTSP-only. SRT sources connect via srt:// URLs and don't take this
   // option; fluent-ffmpeg/ffmpeg picks the right demuxer from the URL
   // scheme either way.
   rtspTransport?: "tcp" | "udp";
+  // Many phone/action-cam RTSP servers (e.g. IP Webcam) publish frames in
+  // the sensor's raw readout orientation with no rotation flag anywhere in
+  // the MJPEG stream — the frame arrives sideways relative to how the
+  // device was actually held. There's no metadata to detect this
+  // automatically, so it's a per-sensor deployment setting, corrected at
+  // the source (via ffmpeg's `transpose` filter) rather than downstream in
+  // cv-inference-svc, so every consumer of this topic sees right-side-up
+  // frames without needing to know about camera mounting.
+  rotation?: FrameRotation;
+}
+
+/** Exported for unit testing without spawning ffmpeg. */
+export function buildRotationFilter(rotation: FrameRotation | undefined): string[] {
+  switch (rotation) {
+    case "90cw":
+      return ["-vf", "transpose=1"];
+    case "90ccw":
+      return ["-vf", "transpose=2"];
+    case "180":
+      return ["-vf", "transpose=1,transpose=1"];
+    default:
+      return [];
+  }
 }
 
 const JPEG_SOI = Buffer.from([0xff, 0xd8]);
@@ -79,7 +104,7 @@ export function extractFrames(
 
   const command = ffmpeg(options.sourceUrl)
     .inputOptions(inputOptions)
-    .outputOptions(["-f", "mjpeg", "-q:v", "5"])
+    .outputOptions(["-f", "mjpeg", "-q:v", "5", ...buildRotationFilter(options.rotation)])
     .on("error", (err: Error) => onError(err));
 
   command.pipe(output, { end: true });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MjpegFrameSplitter } from "../src/rtsp/frameExtractor.js";
+import { MjpegFrameSplitter, buildRotationFilter } from "../src/rtsp/frameExtractor.js";
 import { parseJpegDimensions } from "../src/jpeg/dimensions.js";
 
 function fakeJpeg(payload: number[] = [1, 2, 3]): Buffer {
@@ -76,4 +76,43 @@ test("parseJpegDimensions reads width/height from a real ffmpeg-encoded MJPEG fr
 
 test("parseJpegDimensions returns null for a buffer with no SOF0 marker", () => {
   assert.equal(parseJpegDimensions(Buffer.from([0xff, 0xd8, 0xff, 0xd9])), null);
+});
+
+test("buildRotationFilter maps each rotation to the right ffmpeg transpose filter", () => {
+  assert.deepEqual(buildRotationFilter(undefined), []);
+  assert.deepEqual(buildRotationFilter("90cw"), ["-vf", "transpose=1"]);
+  assert.deepEqual(buildRotationFilter("90ccw"), ["-vf", "transpose=2"]);
+  assert.deepEqual(buildRotationFilter("180"), ["-vf", "transpose=1,transpose=1"]);
+});
+
+test("a 90cw rotation filter swaps width/height on a real ffmpeg-encoded frame", async () => {
+  // Same real-encode approach as the SOF0 test above, not a hand-built
+  // fixture — this is the actual bug found testing against a real phone
+  // stream: IP Webcam's RTSP output carries no rotation flag, so a frame
+  // needs correcting at the source. Verifies the filter genuinely rotates
+  // pixels (dimensions swap 64x48 -> 48x64), not just that the string looks
+  // plausible.
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+
+  const { stdout } = await run(
+    "ffmpeg",
+    [
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=red:s=64x48",
+      "-frames:v",
+      "1",
+      ...buildRotationFilter("90cw"),
+      "-f",
+      "mjpeg",
+      "-",
+    ],
+    { encoding: "buffer", maxBuffer: 10 * 1024 * 1024 },
+  );
+
+  const dims = parseJpegDimensions(stdout as unknown as Buffer);
+  assert.deepEqual(dims, { width: 48, height: 64 });
 });
