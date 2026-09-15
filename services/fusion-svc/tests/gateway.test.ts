@@ -164,6 +164,8 @@ test("sensor:status is never AOI-scoped — every client receives it regardless 
     latency_ms: 10,
     drop_rate: 0,
     last_heartbeat: new Date().toISOString(),
+    position: null,
+    coverage_radius_m: null,
   });
 
   await sleep(300);

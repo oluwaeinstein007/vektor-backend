@@ -8,3 +8,4 @@ export * from "./auditLog.js";
 export * from "./geofence.js";
 export * from "./logistics.js";
 export * from "./reporting.js";
+export * from "./sensorRegistry.js";

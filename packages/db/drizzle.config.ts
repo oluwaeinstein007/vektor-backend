@@ -15,6 +15,7 @@ export default defineConfig({
     "./src/schema/geofence.ts",
     "./src/schema/logistics.ts",
     "./src/schema/reporting.ts",
+    "./src/schema/sensorRegistry.ts",
   ],
   out: "./migrations",
   dialect: "postgresql",

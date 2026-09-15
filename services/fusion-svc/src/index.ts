@@ -4,7 +4,8 @@ import { createRedisClient, WatermarkWindow } from "@vektor/redis";
 import { createDb } from "@vektor/db";
 import { buildApp } from "./app.js";
 import { FusionGateway } from "./socket/gateway.js";
-import { runIngestConsumers, FUSION_DOMAINS } from "./kafka/ingestConsumers.js";
+import { runIngestConsumers, FUSION_DOMAINS, type SensorCoverage } from "./kafka/ingestConsumers.js";
+import { listSensorRegistrations } from "./sensors/queries.js";
 import { runVideoFrameConsumer } from "./kafka/videoFrameConsumer.js";
 import { runPipelineOnce, createTrackManager } from "./pipeline/pipeline.js";
 import { createGeofenceCheckQueue } from "./queue/geofenceProducer.js";
@@ -19,6 +20,7 @@ const PORT = Number(process.env.PORT ?? 3007);
 const WATERMARK_MS = Number(process.env.WATERMARK_MS ?? 500); // Pitfall 1 (§17)
 const POLL_BLOCK_MS = Number(process.env.POLL_BLOCK_MS ?? 1000);
 const VIDEO_FRAME_MIN_INTERVAL_MS = Number(process.env.VIDEO_FRAME_MIN_INTERVAL_MS ?? 750);
+const SENSOR_REGISTRY_REFRESH_MS = Number(process.env.SENSOR_REGISTRY_REFRESH_MS ?? 30_000);
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -40,18 +42,40 @@ async function main(): Promise<void> {
 
   const app = buildApp({ db });
   await app.listen({ port: PORT, host: "0.0.0.0" });
-  logger.info({ port: PORT }, "fusion-svc HTTP (health + blue-force/no-strike REST) listening");
+  logger.info({ port: PORT }, "fusion-svc HTTP (health + blue-force/no-strike/sensors REST) listening");
 
   // Attached to the same HTTP server Fastify is already listening on — this
   // is the Socket.io gateway apps/web's FE-002 has been waiting on since
   // Phase 1 (see socket/gateway.ts's header comment).
   const gateway = new FusionGateway(app.server);
 
+  // Polled on an interval rather than queried per-message: ingestConsumers's
+  // eachMessage handler runs on every single Kafka message across every
+  // domain topic, so a synchronous in-memory lookup here is what keeps
+  // "does this sensor have a registered coverage radius" from becoming a
+  // DB round-trip per message.
+  const sensorCoverageCache = new Map<string, SensorCoverage>();
+  async function refreshSensorCoverageCache(): Promise<void> {
+    try {
+      const rows = await listSensorRegistrations(db);
+      sensorCoverageCache.clear();
+      for (const row of rows) {
+        const [lon, lat] = (row.position as [number, number] | null) ?? [0, 0];
+        sensorCoverageCache.set(row.sensor_id, { position: { lat, lon }, coverage_radius_m: row.coverage_radius_m });
+      }
+    } catch (err) {
+      logger.warn({ err }, "failed to refresh sensor coverage cache");
+    }
+  }
+  await refreshSensorCoverageCache();
+  const sensorRegistryRefreshTimer = setInterval(() => void refreshSensorCoverageCache(), SENSOR_REGISTRY_REFRESH_MS);
+
   const ingestPromise = runIngestConsumers({
     consumer,
     redis,
     env: VEKTOR_ENV,
     onSensorHealth: (health) => gateway.emitSensorStatus(health),
+    getSensorCoverage: (sensorId) => sensorCoverageCache.get(sensorId) ?? null,
     onError: (domain, err) => logger.warn({ domain, err }, "failed to ingest event"),
   });
 
@@ -96,6 +120,7 @@ async function main(): Promise<void> {
   async function shutdown(signal: string): Promise<void> {
     logger.info({ signal, processedCount, activeTracks: trackManager.size }, "shutting down");
     running = false;
+    clearInterval(sensorRegistryRefreshTimer);
     await pipelineLoop;
     await app.close();
     await gateway.close();

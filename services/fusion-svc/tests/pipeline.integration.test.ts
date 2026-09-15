@@ -53,8 +53,13 @@ test("AIS fix + EW/RF corroboration flow end-to-end through Kafka, Redis Streams
   // Without this, a fresh test run reads every leftover entry from every
   // prior run of this test too, which looks like instant success but isn't
   // actually proving *this* run's Kafka→Redis flow (confirmed the hard way
-  // — see vektor-build-conventions memory).
-  await redis.del(...FUSION_DOMAINS.map((d) => streamKey(d)));
+  // — see vektor-build-conventions memory). Only reset the domains this
+  // test actually touches ("ais"/"ewrf") — deleting every domain's stream
+  // would race-wipe data a concurrently running test file (e.g.
+  // sensorCoverage.test.ts, which uses "iot") already published but hasn't
+  // consumed yet. Node's test runner runs separate test files concurrently
+  // by default.
+  await redis.del(...(["ais", "ewrf"] as const).map((d) => streamKey(d)));
 
   const kafka = createKafkaClient({ clientId: `fusion-test-${testId}`, brokers: [KAFKA_BROKERS] });
 

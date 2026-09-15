@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
 import blueForceRoutes from "./blueforce/routes.js";
+import sensorRoutes from "./sensors/routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -43,11 +44,15 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       "GET /api/v1/no-strike-zones",
       "POST /api/v1/no-strike-zones",
       "DELETE /api/v1/no-strike-zones/:id",
+      "GET /api/v1/sensors",
+      "POST /api/v1/sensors",
+      "DELETE /api/v1/sensors/:id",
       "Socket.IO gateway (entity:new/updated/lost, sensor:status)",
     ],
   }));
 
   app.register(blueForceRoutes);
+  app.register(sensorRoutes);
 
   return app;
 }

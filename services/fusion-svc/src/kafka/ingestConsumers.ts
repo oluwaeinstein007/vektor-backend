@@ -45,12 +45,24 @@ const TOPIC_ACTIONS: Record<FusionDomain, string> = {
   iot: "telemetry",
 };
 
+export interface SensorCoverage {
+  position: { lat: number; lon: number };
+  coverage_radius_m: number;
+}
+
 export interface IngestConsumersOptions {
   consumer: Consumer;
   redis: Redis;
   env: VektorEnv;
   /** REQ-1.8: called once per successfully-parsed message so the caller can surface it via sensor:status — every domain schema carries sensor_id/sensor_ts, so this is derivable generically rather than per-domain. */
   onSensorHealth?: (health: SensorHealth) => void;
+  /**
+   * Synchronous lookup into a registry the caller keeps refreshed (index.ts
+   * polls the sensor_registry table on an interval) — deliberately not an
+   * async DB call made per-message, since this runs on every single Kafka
+   * message across every domain topic.
+   */
+  getSensorCoverage?: (sensorId: string) => SensorCoverage | null;
   onError?: (domain: FusionDomain, err: Error) => void;
 }
 
@@ -72,12 +84,15 @@ export async function runIngestConsumers(options: IngestConsumersOptions): Promi
         await publishToStream(options.redis, domain, parsed.sensor_ts, parsed);
         // No adapter attaches a sequence number yet (SVC-003), so drop_rate
         // can't be measured for real — 0 is the honest default until one does.
+        const coverage = options.getSensorCoverage?.(parsed.sensor_id) ?? null;
         options.onSensorHealth?.({
           sensor_id: parsed.sensor_id,
           status: "ONLINE",
           latency_ms: Math.max(0, Date.now() - Date.parse(parsed.sensor_ts)),
           drop_rate: 0,
           last_heartbeat: new Date().toISOString(),
+          position: coverage?.position ?? null,
+          coverage_radius_m: coverage?.coverage_radius_m ?? null,
         });
       } catch (err) {
         options.onError?.(domain, err instanceof Error ? err : new Error(String(err)));

@@ -57,6 +57,13 @@
       "when": 1787709107424,
       "tag": "0007_whole_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789437671556,
+      "tag": "0008_ambitious_wong",
+      "breakpoints": true
     }
   ]
 }
