@@ -13,6 +13,7 @@ import { io as ioClient, type Socket } from "socket.io-client";
 import { createKafkaClient } from "@vektor/kafka";
 import { createRedisClient, WatermarkWindow, streamKey } from "@vektor/redis";
 import { createDb } from "@vektor/db";
+import { createTestAuth } from "@vektor/auth/testing";
 import type { Entity, EntityUpdatedEvent } from "@vektor/shared";
 import { buildApp } from "../src/app.js";
 import { FusionGateway } from "../src/socket/gateway.js";
@@ -39,7 +40,8 @@ async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<voi
 test("AIS fix + EW/RF corroboration flow end-to-end through Kafka, Redis Streams, EKF fusion, PostGIS no-strike, Postgres, and Socket.io", async (t) => {
   const testId = randomUUID();
   const db = createDb(DATABASE_URL);
-  const app = buildApp({ db, logger: false });
+  const testAuth = await createTestAuth();
+  const app = buildApp({ db, auth: testAuth.authOptions, logger: false });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const address = app.server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;

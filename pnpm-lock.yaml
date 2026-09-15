@@ -402,6 +402,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
+      '@vektor/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db

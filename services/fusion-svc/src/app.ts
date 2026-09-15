@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
+import { vektorAuthPlugin, type JwtVerifierOptions } from "@vektor/auth";
 import blueForceRoutes from "./blueforce/routes.js";
 import sensorRoutes from "./sensors/routes.js";
 
@@ -13,6 +14,7 @@ declare module "fastify" {
 
 export interface BuildAppOptions {
   db: VektorDb;
+  auth: JwtVerifierOptions;
   logger?: boolean;
 }
 
@@ -29,6 +31,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   // endpoint directly from the browser — permissive for now since this is
   // local dev tooling, not an internet-facing deployment.
   app.register(cors, { origin: true });
+  app.register(vektorAuthPlugin, options.auth);
 
   app.get("/healthz", async () => ({ status: "ok" }));
 

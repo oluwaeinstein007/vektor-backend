@@ -1,4 +1,5 @@
 import pino from "pino";
+import { authOptionsFromEnv } from "@vektor/auth";
 import { createKafkaClient, type VektorEnv } from "@vektor/kafka";
 import { createRedisClient, WatermarkWindow } from "@vektor/redis";
 import { createDb } from "@vektor/db";
@@ -40,7 +41,7 @@ async function main(): Promise<void> {
   const videoFrameConsumer = kafka.consumer({ groupId: "fusion-svc-video-frame" });
   await videoFrameConsumer.connect();
 
-  const app = buildApp({ db });
+  const app = buildApp({ db, auth: authOptionsFromEnv() });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "fusion-svc HTTP (health + blue-force/no-strike/sensors REST) listening");
 

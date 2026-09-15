@@ -1,8 +1,10 @@
 // REQ-1.8 (Epic 1)'s `POST /api/v1/sensors` (UC-5.1) — same
 // fastify-type-provider-zod response-schema-as-REQ-9.1-enforcement pattern
-// as blueforce/routes.ts. No auth-svc dependency exists yet to gate this
-// SuperAdmin-only per the REQ table, same gap every other route in this
-// repo already flags.
+// as blueforce/routes.ts. 07-data-api.md §13.1: GET is "All roles", POST is
+// SuperAdmin; DELETE isn't in the table but carries the same (or higher)
+// stakes as registering a sensor, so it's held to the same SuperAdmin bar.
+// blueforce/routes.ts (blue-force-assets, no-strike-zones) has this same
+// gap still — not addressed here, flagged for a follow-up pass.
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -26,7 +28,7 @@ const sensorRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.get(
     "/api/v1/sensors",
-    { schema: { response: { 200: z.array(SensorRegistration) } } },
+    { preHandler: app.requireRole("all"), schema: { response: { 200: z.array(SensorRegistration) } } },
     async () => {
       const rows = await listSensorRegistrations(app.db);
       return rows.map(toWireSensorRegistration);
@@ -35,7 +37,7 @@ const sensorRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.post(
     "/api/v1/sensors",
-    { schema: { body: RegisterSensorBody, response: { 200: SensorRegistration } } },
+    { preHandler: app.requireRole("superadmin"), schema: { body: RegisterSensorBody, response: { 200: SensorRegistration } } },
     async (request) => {
       const row = await upsertSensorRegistration(app.db, request.body);
       return toWireSensorRegistration(row);
@@ -44,7 +46,10 @@ const sensorRoutes: FastifyPluginAsync = async (app) => {
 
   typedApp.delete(
     "/api/v1/sensors/:id",
-    { schema: { params: SensorIdParams, response: { 204: z.void(), 404: ErrorResponse } } },
+    {
+      preHandler: app.requireRole("superadmin"),
+      schema: { params: SensorIdParams, response: { 204: z.void(), 404: ErrorResponse } },
+    },
     async (request, reply) => {
       const deleted = await deleteSensorRegistration(app.db, request.params.id);
       if (!deleted) return reply.code(404).send({ error: "sensor not found" });
