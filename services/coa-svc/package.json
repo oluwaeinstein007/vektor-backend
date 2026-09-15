@@ -26,7 +26,7 @@
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.2.0",
     "fastify-type-provider-zod": "^4.0.2",
-    "mgrs": "^2.1.0",
+    "mgrs": "^2.2.0",
     "node-llama-cpp": "^3.20.0",
     "pino": "^9.6.0",
     "zod": "^3.24.1"

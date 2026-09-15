@@ -277,7 +277,7 @@ importers:
         specifier: ^4.0.2
         version: 4.0.2(fastify@5.12.1)(zod@3.25.76)
       mgrs:
-        specifier: ^2.1.0
+        specifier: ^2.2.0
         version: 2.2.0
       node-llama-cpp:
         specifier: ^3.20.0
@@ -436,7 +436,7 @@ importers:
         specifier: ^15.2.0
         version: 15.2.0
       mgrs:
-        specifier: ^2.1.0
+        specifier: ^2.2.0
         version: 2.2.0
       pino:
         specifier: ^9.6.0
