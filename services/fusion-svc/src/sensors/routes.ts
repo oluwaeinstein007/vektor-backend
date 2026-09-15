@@ -1,4 +1,4 @@
-// REQ-1.8/Epic 8's `POST /api/v1/sensors` (UC-5.1) — same
+// REQ-1.8 (Epic 1)'s `POST /api/v1/sensors` (UC-5.1) — same
 // fastify-type-provider-zod response-schema-as-REQ-9.1-enforcement pattern
 // as blueforce/routes.ts. No auth-svc dependency exists yet to gate this
 // SuperAdmin-only per the REQ table, same gap every other route in this
