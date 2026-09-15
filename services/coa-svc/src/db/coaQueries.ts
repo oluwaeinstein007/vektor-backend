@@ -21,6 +21,15 @@ export async function listCoasBySituation(db: VektorDb, situationId: string) {
   });
 }
 
+/** Most-recent-first across every situation — backs a COA decision-log/
+ * history view, distinct from listCoasBySituation's per-target scoping. */
+export async function listAllCoas(db: VektorDb, limit: number) {
+  return db.query.coas.findMany({
+    orderBy: desc(coas.generated_at),
+    limit,
+  });
+}
+
 export async function getCoaById(db: VektorDb, coaId: string) {
   return db.query.coas.findFirst({ where: eq(coas.coa_id, coaId) });
 }

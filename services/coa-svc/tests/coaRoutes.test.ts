@@ -247,3 +247,77 @@ test("POST /api/v1/coa/:coa_id/approve on a nonexistent coa_id returns 404", asy
   });
   assert.equal(res.statusCode, 404);
 });
+
+test("GET /api/v1/coa returns a decision log across situations, most recent first", async (t) => {
+  const db = createDb(DATABASE_URL);
+  const qdrant = createQdrantClient(QDRANT_URL);
+  const { client: auditClient } = fakeAuditClient();
+  const testAuth = await createTestAuth();
+  const app = buildApp({
+    db,
+    qdrant,
+    mode: { kind: "edge", modelPath: "/nonexistent" },
+    auditSvcUrl: "http://unused",
+    fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
+    logger: false,
+    auditClient,
+  });
+  t.after(async () => {
+    await app.close();
+    await db.$client.end();
+  });
+
+  // Two fresh situations, not a fixed count assertion on the whole
+  // response — this table is shared with every other test file's own
+  // inserts in this real, persistent Postgres instance (see the existing
+  // "fresh UUID per run" comment above), so this only asserts that both of
+  // *this* test's own rows are present and correctly ordered relative to
+  // each other, never the total array length.
+  const olderSituation = randomUUID();
+  const newerSituation = randomUUID();
+  await insertCoa(db, { situation_id: olderSituation, options: [VALID_OPTION] });
+  await new Promise((resolve) => setTimeout(resolve, 10)); // ensure a distinct generated_at ordering
+  await insertCoa(db, { situation_id: newerSituation, options: [VALID_OPTION] });
+
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/coa?limit=500",
+    headers: await testAuth.authHeader({ sub: "cdr-1", roles: ["Commander"] }),
+  });
+  assert.equal(res.statusCode, 200);
+  const body = res.json() as Array<{ situation_id: string }>;
+  const olderIndex = body.findIndex((c) => c.situation_id === olderSituation);
+  const newerIndex = body.findIndex((c) => c.situation_id === newerSituation);
+  assert.ok(olderIndex !== -1, "older situation's COA missing from the log");
+  assert.ok(newerIndex !== -1, "newer situation's COA missing from the log");
+  assert.ok(newerIndex < olderIndex, "expected most-recent-first ordering");
+});
+
+test("GET /api/v1/coa rejects a non-Commander role with 403", async (t) => {
+  const db = createDb(DATABASE_URL);
+  const qdrant = createQdrantClient(QDRANT_URL);
+  const { client: auditClient } = fakeAuditClient();
+  const testAuth = await createTestAuth();
+  const app = buildApp({
+    db,
+    qdrant,
+    mode: { kind: "edge", modelPath: "/nonexistent" },
+    auditSvcUrl: "http://unused",
+    fusionSvcUrl: "http://unused",
+    auth: testAuth.authOptions,
+    logger: false,
+    auditClient,
+  });
+  t.after(async () => {
+    await app.close();
+    await db.$client.end();
+  });
+
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/coa",
+    headers: await testAuth.authHeader({ sub: "analyst-1", roles: ["Analyst"] }),
+  });
+  assert.equal(res.statusCode, 403);
+});

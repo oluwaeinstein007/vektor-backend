@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { COA } from "@vektor/shared";
-import { listCoasBySituation, getCoaById, decideCoa } from "../db/coaQueries.js";
+import { listCoasBySituation, listAllCoas, getCoaById, decideCoa } from "../db/coaQueries.js";
 import { toWireCoa } from "../db/mappers.js";
 import type { AuditClient } from "../audit/client.js";
 
@@ -11,6 +11,7 @@ const ErrorResponse = z.object({ error: z.string() });
 
 const SituationIdParams = z.object({ situation_id: z.string().uuid() });
 const CoaIdParams = z.object({ coa_id: z.string().uuid() });
+const ListAllQuery = z.object({ limit: z.coerce.number().int().positive().max(500).default(50) });
 
 // SEC-003 audit fix: actor_user_id/actor_role used to be caller-supplied
 // body fields — a client could approve a COA as themselves and have the
@@ -33,6 +34,20 @@ const coaRoutes: FastifyPluginAsync<{ auditClient: AuditClient }> = async (app, 
     { preHandler: app.requireRole("commander"), schema: { params: SituationIdParams, response: { 200: z.array(COA) } } },
     async (request) => {
       const rows = await listCoasBySituation(app.db, request.params.situation_id);
+      return rows.map(toWireCoa);
+    },
+  );
+
+  // Decision-log/history view — every COA across every situation,
+  // most-recent-first, not scoped to one target. Not in 07-data-api.md's
+  // table (only the situation_id-keyed GET is), same "no PRD spec, follow
+  // the existing route pattern" note as the by-id lookup below; held to the
+  // same Commander bar as every other COA read here.
+  typedApp.get(
+    "/api/v1/coa",
+    { preHandler: app.requireRole("commander"), schema: { querystring: ListAllQuery, response: { 200: z.array(COA) } } },
+    async (request) => {
+      const rows = await listAllCoas(app.db, request.query.limit);
       return rows.map(toWireCoa);
     },
   );
