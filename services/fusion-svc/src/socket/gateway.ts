@@ -15,6 +15,7 @@
 // implementation behind it.
 import type { Server as HttpServer } from "node:http";
 import { Server as SocketIOServer, type Socket } from "socket.io";
+import { createJwtVerifier, satisfiesRequirement, JwtVerificationError, type JwtVerifierOptions } from "@vektor/auth";
 import { Entity, EntityUpdatedEvent, EntityLostEvent, SensorHealth, BoundingBox, VideoFrameSocketEvent, type Position } from "@vektor/shared";
 
 function withinBbox(position: Position, bbox: BoundingBox): boolean {
@@ -34,8 +35,34 @@ export class FusionGateway {
   // subscribe:area doesn't silently start missing events.
   private readonly subscriptions = new Map<string, BoundingBox | null>();
 
-  constructor(httpServer: HttpServer) {
+  constructor(httpServer: HttpServer, auth: JwtVerifierOptions) {
     this.io = new SocketIOServer(httpServer, { transports: ["websocket"] });
+
+    // This gateway streams the same Entity data geospatial-svc's REST
+    // /api/v1/entities gates at analyst+ — until now it had no gate of any
+    // kind, a real gap the REST side never had (found auditing apps/web's
+    // access model). The token travels in the connection handshake
+    // (`io(url, { auth: { token } })`, socket.io-client's own documented
+    // pattern), not a header — there's no per-message Authorization header
+    // on a persistent WebSocket connection to check.
+    const verify = createJwtVerifier(auth);
+    this.io.use(async (socket, next) => {
+      const token = (socket.handshake.auth as { token?: unknown } | undefined)?.token;
+      if (typeof token !== "string" || !token) {
+        next(new Error("missing bearer token"));
+        return;
+      }
+      try {
+        const user = await verify(token);
+        if (!satisfiesRequirement(user.role, "analyst+")) {
+          next(new Error(`role '${user.role}' does not satisfy requirement 'analyst+'`));
+          return;
+        }
+        next();
+      } catch (err) {
+        next(new Error(err instanceof JwtVerificationError ? err.message : "invalid token"));
+      }
+    });
 
     this.io.on("connection", (socket: Socket) => {
       this.subscriptions.set(socket.id, null);

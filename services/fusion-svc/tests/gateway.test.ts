@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
+import { createTestAuth, type TestAuth } from "@vektor/auth/testing";
 import type { Entity } from "@vektor/shared";
 import { FusionGateway } from "../src/socket/gateway.js";
 
@@ -30,26 +31,34 @@ function makeEntity(overrides: Partial<Entity["position"]> = {}): Entity {
   };
 }
 
-async function startServer(): Promise<{ httpServer: HttpServer; gateway: FusionGateway; port: number }> {
+async function startServer(): Promise<{
+  httpServer: HttpServer;
+  gateway: FusionGateway;
+  port: number;
+  token: string;
+  signToken: TestAuth["signToken"];
+}> {
   const httpServer = createServer();
-  const gateway = new FusionGateway(httpServer);
+  const testAuth = await createTestAuth();
+  const gateway = new FusionGateway(httpServer, testAuth.authOptions);
   await new Promise<void>((resolve) => httpServer.listen(0, resolve));
   const address = httpServer.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
-  return { httpServer, gateway, port };
+  const token = await testAuth.signToken({ sub: "test-operator", roles: ["Analyst"] });
+  return { httpServer, gateway, port, token, signToken: testAuth.signToken };
 }
 
-function connect(port: number): Promise<ClientSocket> {
+function connect(port: number, token: string): Promise<ClientSocket> {
   return new Promise((resolve, reject) => {
-    const socket = ioClient(`http://127.0.0.1:${port}`, { transports: ["websocket"] });
+    const socket = ioClient(`http://127.0.0.1:${port}`, { transports: ["websocket"], auth: { token } });
     socket.on("connect", () => resolve(socket));
     socket.on("connect_error", reject);
   });
 }
 
 test("a client with no subscription receives every entity event (pre-API-002 broadcast behavior preserved)", async (t) => {
-  const { httpServer, gateway, port } = await startServer();
-  const client = await connect(port);
+  const { httpServer, gateway, port, token } = await startServer();
+  const client = await connect(port, token);
   t.after(() => {
     client.disconnect();
     return gateway.close();
@@ -68,8 +77,8 @@ test("a client with no subscription receives every entity event (pre-API-002 bro
 });
 
 test("subscribe:area scopes entity:new/updated/lost to the bounding box, excluding entities outside it", async (t) => {
-  const { httpServer, gateway, port } = await startServer();
-  const client = await connect(port);
+  const { httpServer, gateway, port, token } = await startServer();
+  const client = await connect(port, token);
   t.after(() => {
     client.disconnect();
     return gateway.close();
@@ -91,8 +100,8 @@ test("subscribe:area scopes entity:new/updated/lost to the bounding box, excludi
 });
 
 test("unsubscribe reverts to receiving every entity event again", async (t) => {
-  const { httpServer, gateway, port } = await startServer();
-  const client = await connect(port);
+  const { httpServer, gateway, port, token } = await startServer();
+  const client = await connect(port, token);
   t.after(() => {
     client.disconnect();
     return gateway.close();
@@ -114,9 +123,9 @@ test("unsubscribe reverts to receiving every entity event again", async (t) => {
 });
 
 test("two clients with different AOIs each see only their own scoped events", async (t) => {
-  const { httpServer, gateway, port } = await startServer();
-  const clientA = await connect(port);
-  const clientB = await connect(port);
+  const { httpServer, gateway, port, token } = await startServer();
+  const clientA = await connect(port, token);
+  const clientB = await connect(port, token);
   t.after(() => {
     clientA.disconnect();
     clientB.disconnect();
@@ -143,8 +152,8 @@ test("two clients with different AOIs each see only their own scoped events", as
 });
 
 test("sensor:status is never AOI-scoped — every client receives it regardless of subscription", async (t) => {
-  const { httpServer, gateway, port } = await startServer();
-  const client = await connect(port);
+  const { httpServer, gateway, port, token } = await startServer();
+  const client = await connect(port, token);
   t.after(() => {
     client.disconnect();
     return gateway.close();
@@ -173,8 +182,8 @@ test("sensor:status is never AOI-scoped — every client receives it regardless 
 });
 
 test("a malformed subscribe:area payload is ignored, not a crash — existing subscription state is unchanged", async (t) => {
-  const { httpServer, gateway, port } = await startServer();
-  const client = await connect(port);
+  const { httpServer, gateway, port, token } = await startServer();
+  const client = await connect(port, token);
   t.after(() => {
     client.disconnect();
     return gateway.close();
@@ -194,4 +203,45 @@ test("a malformed subscribe:area payload is ignored, not a crash — existing su
   // unsubscribed (receives everything) rather than the gateway crashing or
   // silently dropping the connection.
   assert.deepEqual(received, [entity.entity_id]);
+});
+
+test("connecting with no token is rejected", async (t) => {
+  const { httpServer, gateway, port } = await startServer();
+  t.after(() => gateway.close());
+
+  await assert.rejects(
+    () =>
+      new Promise((resolve, reject) => {
+        const socket = ioClient(`http://127.0.0.1:${port}`, { transports: ["websocket"] });
+        socket.on("connect", () => resolve(undefined));
+        socket.on("connect_error", (err) => {
+          socket.close();
+          reject(err);
+        });
+      }),
+    /missing bearer token/,
+  );
+});
+
+test("connecting with a role below analyst+ is rejected", async (t) => {
+  const { httpServer, gateway, port, signToken } = await startServer();
+  t.after(() => gateway.close());
+
+  // Signed by the same server's own testAuth keypair (via startServer()'s
+  // returned signToken) so this actually exercises the role check, not a
+  // signature-verification failure against an untrusted key.
+  const belowBarToken = await signToken({ sub: "viewer-1", roles: ["Viewer"] });
+
+  await assert.rejects(
+    () =>
+      new Promise((resolve, reject) => {
+        const socket = ioClient(`http://127.0.0.1:${port}`, { transports: ["websocket"], auth: { token: belowBarToken } });
+        socket.on("connect", () => resolve(undefined));
+        socket.on("connect_error", (err) => {
+          socket.close();
+          reject(err);
+        });
+      }),
+    /invalid token|does not satisfy/,
+  );
 });

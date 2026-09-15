@@ -46,7 +46,7 @@ test("AIS fix + EW/RF corroboration flow end-to-end through Kafka, Redis Streams
   const address = app.server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
 
-  const gateway = new FusionGateway(app.server);
+  const gateway = new FusionGateway(app.server, testAuth.authOptions);
   const redis = createRedisClient(REDIS_URL);
 
   // The Redis Stream keys runIngestConsumers/WatermarkWindow use are fixed
@@ -80,7 +80,8 @@ test("AIS fix + EW/RF corroboration flow end-to-end through Kafka, Redis Streams
   const producer = kafka.producer();
   await producer.connect();
 
-  const socket: Socket = ioClient(`http://127.0.0.1:${port}`, { transports: ["websocket"] });
+  const socketToken = await testAuth.signToken({ sub: "test-operator", roles: ["Analyst"] });
+  const socket: Socket = ioClient(`http://127.0.0.1:${port}`, { transports: ["websocket"], auth: { token: socketToken } });
   const entityNewEvents: Entity[] = [];
   const entityUpdatedEvents: EntityUpdatedEvent[] = [];
   socket.on("entity:new", (e: Entity) => entityNewEvents.push(e));

@@ -41,14 +41,15 @@ async function main(): Promise<void> {
   const videoFrameConsumer = kafka.consumer({ groupId: "fusion-svc-video-frame" });
   await videoFrameConsumer.connect();
 
-  const app = buildApp({ db, auth: authOptionsFromEnv() });
+  const authOptions = authOptionsFromEnv();
+  const app = buildApp({ db, auth: authOptions });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "fusion-svc HTTP (health + blue-force/no-strike/sensors REST) listening");
 
   // Attached to the same HTTP server Fastify is already listening on — this
   // is the Socket.io gateway apps/web's FE-002 has been waiting on since
   // Phase 1 (see socket/gateway.ts's header comment).
-  const gateway = new FusionGateway(app.server);
+  const gateway = new FusionGateway(app.server, authOptions);
 
   // Polled on an interval rather than queried per-message: ingestConsumers's
   // eachMessage handler runs on every single Kafka message across every
