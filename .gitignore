@@ -7,3 +7,4 @@ dist-tests/
 .env
 .env.local
 .DS_Store
+services/reporting-svc/storage/

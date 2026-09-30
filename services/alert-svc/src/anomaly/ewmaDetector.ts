@@ -54,7 +54,18 @@ interface EntityAnomalyState {
   headingSin: EwmaState;
   headingCos: EwmaState;
   headingDeviation: EwmaState;
+  samples: number;
 }
+
+// A z-score computed against a variance estimate built from only one prior
+// sample is meaningless, not just noisy: updateEwma seeds variance at 0 on
+// a state's first call, so its second call divides by MIN_STD instead of a
+// real standard deviation, turning any ordinary jitter into a z-score in
+// the hundreds of millions (confirmed 2026-09-16 — this, not a formula
+// bug, is what was flooding the Alerts page with entries like "speed
+// z=265748601.39"). Require a handful of real samples before trusting the
+// variance enough to flag anything.
+const WARMUP_SAMPLES = 5;
 
 export interface AnomalyResult {
   speedZScore: number;
@@ -91,6 +102,7 @@ export class EwmaAnomalyDetector {
         headingSin: { mean: 0, variance: 0, initialized: false },
         headingCos: { mean: 0, variance: 0, initialized: false },
         headingDeviation: { mean: 0, variance: 0, initialized: false },
+        samples: 0,
       };
       this.states.set(entityId, state);
     }
@@ -104,7 +116,10 @@ export class EwmaAnomalyDetector {
     const deviation = angularDeviationDeg(smoothedHeadingDeg, headingDeg);
     const headingZScore = updateEwma(state.headingDeviation, deviation, this.alpha);
 
-    const isAnomalous = Math.abs(speedZScore) > this.zScoreThreshold || Math.abs(headingZScore) > this.zScoreThreshold;
+    state.samples++;
+    const isAnomalous =
+      state.samples > WARMUP_SAMPLES &&
+      (Math.abs(speedZScore) > this.zScoreThreshold || Math.abs(headingZScore) > this.zScoreThreshold);
     return { speedZScore, headingZScore, isAnomalous };
   }
 
