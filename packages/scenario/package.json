@@ -1,0 +1,35 @@
+{
+  "name": "@vektor/scenario",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NW-020: deterministic scenario player — advances a scenario clock and publishes schema-valid sensor events onto the real Kafka topics through the real @vektor/proto contracts, at controllable speed. A repeatable input for NW-013/NW-014, a demo source for a deployed instance, and the basis of an operator training mode.",
+  "license": "BUSL-1.1",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/tests/*.test.js",
+    "test:coverage": "pnpm build && node --test --experimental-test-coverage --test-coverage-exclude='**/tests/**' --test-coverage-exclude='**/*.test.*' dist/tests/*.test.js",
+    "run": "pnpm build && node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vektor/kafka": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "kafkajs": "^2.2.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
