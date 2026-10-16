@@ -1,0 +1,24 @@
+{
+  "name": "@vektor/latency-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NW-013: measures the real sensor-to-operator leg of G1's 'sensor-to-decision latency < 60 seconds' — a real AIS event published to Kafka, through a live fusion-svc's EKF/correlation pipeline, to a real Socket.io client receiving the fused Entity. Not a microbenchmark: every hop is the production code path.",
+  "license": "BUSL-1.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "run": "pnpm build && node dist/src/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vektor/kafka": "workspace:*",
+    "@vektor/shared": "workspace:*",
+    "kafkajs": "^2.2.4",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

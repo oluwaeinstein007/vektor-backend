@@ -1,0 +1,238 @@
+# VEKTOR cloud-profile dev stack (NW-003).
+#
+# Until this file existed, the only compose file in all seven repos was
+# vektor-edge's edge-profile overlay, and bringing up a cloud-profile dev
+# environment meant reading six service READMEs and running `docker run` by
+# hand. NFR §8.6 commits to the full stack in under two minutes; this is
+# that, minus the TS services themselves, which run on the host under
+# `pnpm dev` so you keep hot reload. (Containerised service images are
+# NW-001/NW-002's job — once they publish, a docker-compose.full.yml can
+# layer them on top of this file.)
+#
+#   Core (default):  postgis, kafka, redis, keycloak, maildev, mosquitto, mediamtx
+#   `--profile full`: + qdrant, routing-postgres, erp-postgres, debezium
+#
+# Host ports are deliberately NOT the service defaults. Every port in the
+# 5432/6379/3000-range this project's READMEs document was already squatted
+# by unrelated projects on the machine this was written on — the exact
+# collision 16-system-status.md warns about. The ports below (15432, 16379,
+# 19092, ...) are chosen to be improbable, and 16379/19092/11883 match what
+# .github/workflows/ci.yml already uses so CI and local dev agree.
+#
+# Up:   pnpm stack:up          (or: docker compose -f compose/docker-compose.dev.yml up -d)
+# Down: pnpm stack:down        (add -v to also drop the volumes)
+
+name: vektor-dev
+
+services:
+  postgis:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: vektor-dev-postgis
+    environment:
+      POSTGRES_PASSWORD: vektor
+      POSTGRES_DB: vektor
+    ports: ["15432:5432"]
+    # 01-vektor-app-role.sql creates the `vektor_app` login role that
+    # migration 0007 GRANTs to. Without it `pnpm db:migrate` fails outright
+    # on a fresh database ("role vektor_app does not exist") — nothing in
+    # the repo created that role except packages/db/tests/rls.test.ts, at
+    # test time. Found by NW-003; see compose/README.md.
+    #
+    # Mounted as a SINGLE FILE, not as a directory. Bind-mounting
+    # ./postgres-init over /docker-entrypoint-initdb.d shadows the postgis
+    # image's own 10_postgis.sh/11_postgis.sh, so the postgis extension
+    # never gets created and migration 0000 dies with
+    # `type "geometry" does not exist`. Reproduced, then fixed this way.
+    volumes:
+      - vektor-postgis-data:/var/lib/postgresql/data
+      - ./postgres-init/01-vektor-app-role.sql:/docker-entrypoint-initdb.d/01-vektor-app-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vektor"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Single-node KRaft, no ZooKeeper — the config every service README in
+  # this repo already documents. Two listeners on purpose: HOST for the
+  # services running on your machine under `pnpm dev`, PLAINTEXT for
+  # anything running inside this compose network later (NW-001's images).
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: vektor-dev-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:19092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports: ["19092:19092"]
+    volumes:
+      - vektor-kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: vektor-dev-redis
+    ports: ["16379:6379"]
+    volumes:
+      - vektor-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The real thing, not the dev auth bridge. fusion-svc (and every other
+  # RBAC-gated service) refuses to start without KEYCLOAK_JWKS_URI, and
+  # packages/auth's dev:auth-bridge carries a loud "never point a real
+  # deployment at this" warning — so the default stack gives you an actual
+  # Keycloak with the six §5.1 realm roles and one user per role imported.
+  # The bridge remains for a lighter loop; see compose/README.md.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: vektor-dev-keycloak
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports: ["18080:8080"]
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # Keycloak 26's management/health endpoint is on 9000, and the image
+      # has no curl/wget — bash's /dev/tcp is the portable check here.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\nHost: localhost\\nConnection: close\\n\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # alert-svc and reporting-svc both dispatch real email. Web UI on
+  # http://localhost:11080 shows whatever they sent.
+  # Pinned to 3.x deliberately. MailDev moved its REST API from /email to
+  # /api/email between 2.x and 3.x, and every test in this repo that asserts
+  # a real email was delivered (alert-svc, reporting-svc) fetches
+  # `${MAILDEV_API_URL}/api/email`. Pinning 2.1.0 here made
+  # reporting-svc's scheduled-dispatch test fail with
+  # `Unexpected token '<' ... is not valid JSON` — it was getting MailDev's
+  # 404 HTML page. ci.yml used an UNPINNED maildev/maildev, which happens to
+  # resolve to 3.x today and will break silently whenever 4.x changes it
+  # again; it is pinned to match.
+  maildev:
+    image: maildev/maildev:3.0.0
+    container_name: vektor-dev-maildev
+    ports: ["11025:1025", "11080:1080"]
+    healthcheck:
+      # 3.x serves health at /api/healthz, not /healthz — the 2.x path
+      # left this container permanently "unhealthy" while working fine.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1080/api/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ingest-svc's MQTT IoT adapter and mavlink-bridge both need a broker.
+  # The stock image refuses anonymous connections without an explicit
+  # config, same as every local-dev README in this repo.
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: vektor-dev-mosquitto
+    ports: ["11883:1883"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # An RTSP endpoint for ingest-svc (SVC-001). Publish a synthetic stream
+  # into it with the ffmpeg one-liner in compose/README.md, or point a real
+  # phone running IP Webcam at it.
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: vektor-dev-mediamtx
+    ports: ["8554:8554", "8890:8890/udp"]
+
+  # ---- `--profile full` below: heavier, and only some services need them ----
+
+  # coa-svc's RAG doctrine store (Phase 4, @vektor/qdrant).
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: vektor-dev-qdrant
+    profiles: ["full"]
+    ports: ["16333:6333", "16334:6334"]
+    volumes:
+      - vektor-qdrant-data:/qdrant/storage
+
+  # logistics-svc's pgr_dijkstra routing (SVC-019). A separate instance
+  # because pgRouting isn't installed on the postgis image.
+  routing-postgres:
+    image: pgrouting/pgrouting:16-3.4-3.6
+    container_name: vektor-dev-routing-postgres
+    profiles: ["full"]
+    environment:
+      POSTGRES_PASSWORD: vektor
+      POSTGRES_DB: vektor_routing
+    ports: ["15434:5432"]
+    volumes:
+      - vektor-routing-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vektor_routing"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Stands in for a customer ERP for logistics-svc's Debezium CDC path
+  # (SVC-017). wal_level=logical is what makes the replication slot possible.
+  erp-postgres:
+    image: postgres:16-alpine
+    container_name: vektor-dev-erp-postgres
+    profiles: ["full"]
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
+    environment:
+      POSTGRES_PASSWORD: vektor
+      POSTGRES_DB: erp
+    ports: ["15433:5432"]
+    volumes:
+      - vektor-erp-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Kafka Connect + the Debezium Postgres connector. Register the connector
+  # against its REST API once it's up — see compose/README.md for the exact
+  # POST body, which produces on dev.vektor.erp.public.inventory.
+  debezium:
+    image: debezium/connect:2.7.3.Final
+    container_name: vektor-dev-debezium
+    profiles: ["full"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      erp-postgres: { condition: service_healthy }
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: vektor-connect
+      CONFIG_STORAGE_TOPIC: _connect_configs
+      OFFSET_STORAGE_TOPIC: _connect_offsets
+      STATUS_STORAGE_TOPIC: _connect_status
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    ports: ["18083:8083"]
+
+volumes:
+  vektor-postgis-data:
+  vektor-kafka-data:
+  vektor-redis-data:
+  vektor-qdrant-data:
+  vektor-routing-data:
+  vektor-erp-data:

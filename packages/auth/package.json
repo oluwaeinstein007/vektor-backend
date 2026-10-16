@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "SEC-003: RBAC enforcement shared across every public-facing Fastify service — Keycloak-shaped JWT verification (§5.1 roles) plus a requireRole() preHandler. See VEKTOR-PRD.md §14.1/§14.3.",
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,6 +22,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test dist-tests/tests/*.test.js",
+    "test:coverage": "tsc -p tsconfig.test.json && node --test --experimental-test-coverage --test-coverage-exclude='**/tests/**' --test-coverage-exclude='**/*.test.*' dist-tests/tests/*.test.js",
     "dev:auth-bridge": "tsc -p tsconfig.json && node dist/dev-auth-bridge.js",
     "clean": "rm -rf dist dist-tests"
   },
@@ -34,7 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "fastify": "^5.2.0",
+    "fastify": "^5.12.7",
     "typescript": "^5.7.2"
   }
 }

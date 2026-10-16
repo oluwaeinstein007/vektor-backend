@@ -3,8 +3,9 @@
 // as blueforce/routes.ts. 07-data-api.md §13.1: GET is "All roles", POST is
 // SuperAdmin; DELETE isn't in the table but carries the same (or higher)
 // stakes as registering a sensor, so it's held to the same SuperAdmin bar.
-// blueforce/routes.ts (blue-force-assets, no-strike-zones) has this same
-// gap still — not addressed here, flagged for a follow-up pass.
+// blueforce/routes.ts (blue-force-assets, no-strike-zones) had this same
+// gap and was closed in the NW-005 follow-up pass — see its header comment
+// for the role requirements chosen there and why.
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

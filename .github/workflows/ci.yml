@@ -54,22 +54,82 @@ jobs:
         working-directory: vektor-backend
         run: pnpm lint
 
-  # Runs the subset of services/packages whose test suites only need
-  # Postgres+PostGIS, Kafka, Redis, Maildev, MediaMTX, and Mosquitto — all
-  # standard images, no exotic multi-container setup. Deliberately excludes
-  # (still a real, documented gap, not silently skipped):
+  # NW-009. The audit numbers in 14-sec004-security-audit.md were seven
+  # weeks stale when this was added, and had drifted from 1 critical /
+  # 11 high to 4 critical / 48 high in that time purely from new
+  # disclosures. A CI job is the only thing that keeps that from recurring.
+  #
+  # `--audit-level high` fails the build on high/critical only. Moderate and
+  # low are reported but don't block — this repo carries a handful of
+  # transitive moderates with no upstream fix, and failing on them would
+  # train everyone to ignore the job.
+  #
+  # Known accepted exception: extract-zip (2 high, via
+  # puppeteer-core > @puppeteer/browsers). Its advisory reports a patched
+  # range of "<0.0.0" — no fixed version exists. It is listed in
+  # `allowed` below so the job stays meaningful; remove it the moment
+  # puppeteer-core drops or replaces that dependency.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+      - name: pnpm audit (fails on high/critical)
+        run: |
+          # No install needed — pnpm audit reads the lockfile.
+          pnpm audit --audit-level high --json > audit.json || true
+          python3 - <<'PYEOF'
+          import json, sys
+          allowed = {"extract-zip"}  # no published fix; see this job's comment
+          with open("audit.json") as f:
+              data = json.load(f)
+          blocking = {}
+          for adv in data.get("advisories", {}).values():
+              if adv.get("severity") not in ("high", "critical"):
+                  continue
+              mod = adv.get("module_name")
+              if mod in allowed:
+                  continue
+              blocking[mod] = adv.get("severity")
+          counts = data.get("metadata", {}).get("vulnerabilities", {})
+          print("vulnerabilities:", ", ".join(f"{k}={v}" for k, v in counts.items() if v) or "none")
+          if blocking:
+              print("\nBLOCKING high/critical advisories:", file=sys.stderr)
+              for mod, sev in sorted(blocking.items()):
+                  print(f"  {sev:9} {mod}", file=sys.stderr)
+              print("\nFix by bumping the direct dependency, or add a pnpm.overrides entry "
+                    "in package.json. Only add to `allowed` when no fixed version exists.",
+                    file=sys.stderr)
+              sys.exit(1)
+          print("no blocking high/critical advisories")
+          PYEOF
+
+  # Runs the subset of services/packages whose test suites need only
+  # Postgres+PostGIS, Kafka, Redis, Maildev, MediaMTX, Mosquitto and
+  # Chrome — all standard images, no exotic multi-container setup.
+  #
+  # NW-006 added `reporting-svc` and `packages/auth` here after checking
+  # what each actually needs rather than trusting the previous note:
+  #   - packages/auth was listed as needing "a live Keycloak realm". It does
+  #     not. Its tests use createTestAuth()'s in-process RSA keypair and
+  #     local JWKS (packages/auth/src/testing.ts) and pass 5/5 with zero
+  #     infrastructure. Verified before adding.
+  #   - reporting-svc needs a real Chrome, which ubuntu-latest already
+  #     ships; CHROME_EXECUTABLE_PATH points at it. 11/11 locally.
+  #
+  # Still genuinely excluded, not silently skipped:
   #   - coa-svc: needs a live Qdrant + BGE-M3 embeddings + a stand-in gRPC
-  #     LLM server, and its edge-mode tests need a ~469MB GGUF fixture that
-  #     isn't committed to the repo (see the Git LFS note added alongside
-  #     this workflow).
+  #     LLM server. Its edge-mode test self-skips without the GGUF fixture
+  #     (which IS committed, via Git LFS — `git lfs fsck` clean), so the
+  #     blocker is the Qdrant/gRPC setup, not the model.
   #   - logistics-svc: needs 3 separate Postgres instances (one running the
   #     pgRouting extension image, one standing in for an ERP with logical
   #     replication enabled) plus a full Debezium/Kafka Connect stack.
-  #   - reporting-svc: needs real headless Chrome (puppeteer-core against a
-  #     system Chrome binary) for PDF generation.
-  #   - packages/auth: its RBAC tests need a live Keycloak realm — this
-  #     sandbox happened to have one already configured (see ADR-0008), but
-  #     that's a local coincidence, not something to assume in generic CI.
+  #     compose/docker-compose.dev.yml's `full` profile now defines all of
+  #     it, so a compose-based job is the obvious next step.
   #   - packages/qdrant, packages/load-test: not yet wired into any CI job.
   test:
     runs-on: ubuntu-latest
@@ -86,7 +146,10 @@ jobs:
         image: redis:7-alpine
         ports: ["16379:6379"]
       maildev:
-        image: maildev/maildev
+        # Pinned: 2.x serves /email, 3.x serves /api/email, and every
+        # mail-delivery assertion in this repo uses /api/email. See
+        # compose/docker-compose.dev.yml for the failure this prevents.
+        image: maildev/maildev:3.0.0
         ports: ["1025:1025", "1080:1080"]
       mediamtx:
         image: bluenviron/mediamtx:latest
@@ -170,10 +233,14 @@ jobs:
           MQTT_BROKER_URL: mqtt://localhost:11883
           MQTT_TOPIC_FILTER: "vektor/sensors/#"
           MQTT_SENSOR_ID: test-iot-1
+          # ubuntu-latest ships Chrome at this path; puppeteer-core
+          # deliberately bundles no browser of its own.
+          CHROME_EXECUTABLE_PATH: /usr/bin/google-chrome
         # --env-mode=loose: see this file's header comment.
         run: |
           pnpm turbo run test --env-mode=loose \
             --filter=@vektor/db --filter=@vektor/redis --filter=@vektor/kafka --filter=@vektor/shared \
+            --filter=@vektor/auth \
             --filter=@vektor/geospatial-svc --filter=@vektor/fusion-svc --filter=@vektor/audit-svc \
             --filter=@vektor/alert-svc --filter=@vektor/edge-sync-svc --filter=@vektor/cv-inference-svc \
-            --filter=@vektor/ingest-svc
+            --filter=@vektor/ingest-svc --filter=@vektor/reporting-svc

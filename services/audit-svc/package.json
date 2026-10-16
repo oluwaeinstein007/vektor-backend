@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "description": "SVC-013 (partial): append-only audit event store, REQ-8.3. See VEKTOR-PRD.md §13.1.",
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && node --test dist/tests/*.test.js",
+    "test:coverage": "pnpm build && node --test --experimental-test-coverage --test-coverage-exclude='**/tests/**' --test-coverage-exclude='**/*.test.*' dist/tests/*.test.js",
     "start": "node dist/src/index.js",
     "clean": "rm -rf dist"
   },
@@ -21,7 +22,7 @@
     "@vektor/db": "workspace:*",
     "@vektor/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.2.0",
+    "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^4.0.2",
     "pino": "^9.6.0",
     "zod": "^3.24.1"

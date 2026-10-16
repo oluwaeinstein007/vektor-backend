@@ -1,0 +1,37 @@
+# Build-context excludes for every service image. NW-001/NW-002.
+#
+# IMPORTANT: every Dockerfile in this repo builds with the VEKTOR/ PARENT
+# directory as its context (see services/DOCKERFILES.md), and Docker reads
+# `.dockerignore` from the context root — i.e. from `VEKTOR/.dockerignore`,
+# not from this file's location.
+#
+# VEKTOR/ is not a git repository, so a file placed there is tracked by
+# nothing and exists only on whichever machine created it. That is exactly
+# what had happened: a VEKTOR/.dockerignore existed locally, and CI
+# (edge-arm64.yml) built with no ignore file at all, sweeping every
+# node_modules and .git in both checkouts into the context.
+#
+# This tracked copy is the source of truth. Keep VEKTOR/.dockerignore
+# identical to it:
+#
+#     cp vektor-backend/.dockerignore ../.dockerignore
+#
+# release-images.yml does the equivalent copy in CI.
+**/node_modules
+**/dist
+**/dist-tests
+**/.turbo
+**/.git
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.next
+demo-screenshots
+
+# vektor-proto's generated client is gitignored, so it exists on a
+# developer machine and not on a clean checkout. Excluding it makes the
+# build behave identically either way — every image runs `pnpm codegen:ts`
+# itself. Without this line a local build silently succeeds using the
+# host's copy while the same build in CI fails with TS2307, which is
+# precisely the bug NW-001 found.
+vektor-proto/src/generated

@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "description": "ML-002/003/004/005/006: onnxruntime-node YOLOv8 inference + DeepSORT tracker. Consumes raw video frames (SVC-001), publishes DetectionEvent (§9.7).",
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && node --test dist/tests/*.test.js",
+    "test:coverage": "pnpm build && node --test --experimental-test-coverage --test-coverage-exclude='**/tests/**' --test-coverage-exclude='**/*.test.*' dist/tests/*.test.js",
     "start": "node dist/src/index.js",
     "clean": "rm -rf dist"
   },
@@ -20,13 +21,13 @@
     "@vektor/auth": "workspace:*",
     "@vektor/kafka": "workspace:*",
     "@vektor/shared": "workspace:*",
-    "fastify": "^5.2.0",
+    "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^4.0.2",
     "kafkajs": "^2.2.4",
     "mathjs": "^15.2.0",
     "onnxruntime-node": "^1.27.0",
     "pino": "^9.6.0",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

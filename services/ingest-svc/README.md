@@ -9,7 +9,7 @@ Phase 1 ingestion: one process, five independently-enabled adapters, sharing one
 | AIS | SVC-003 (REQ-1.5) | `AIS_HOST`, `AIS_PORT`, `AIS_SENSOR_ID` | `{env}.vektor.ais.position` |
 | ADS-B (SBS-1) | SVC-003 (REQ-1.5) | `ADSB_HOST`, `ADSB_PORT`, `ADSB_SENSOR_ID` | `{env}.vektor.adsb.position` |
 | MQTT IoT | SVC-003 (REQ-1.5) | `MQTT_BROKER_URL`, `MQTT_TOPIC_FILTER`, `MQTT_SENSOR_ID` | `{env}.vektor.iot.telemetry` |
-| Field ingest HTTP (phone GPS/gyro) | new, not in the original roadmap phases | `FIELD_DEVICE_SHARED_SECRET`, optionally `FIELD_INGEST_PORT` (default 3011) | `{env}.vektor.iot.telemetry` |
+| Field ingest HTTP (phone GPS/gyro) | new, not in the original roadmap phases | `FIELD_DEVICE_SHARED_SECRET`, optionally `FIELD_INGEST_PORT` (default 3016 — 3011 belongs to reporting-svc) | `{env}.vektor.iot.telemetry` |
 
 Plus `KAFKA_BROKERS` (default `localhost:9092`) and `VEKTOR_ENV` (default `dev`) shared by all adapters.
 

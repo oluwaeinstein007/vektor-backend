@@ -136,7 +136,13 @@ async function startFieldIngestHttp(): Promise<boolean> {
   const secret = process.env.FIELD_DEVICE_SHARED_SECRET;
   if (!secret) return false;
 
-  const port = Number(process.env.FIELD_INGEST_PORT ?? 3011);
+  // 3016, not 3011: reporting-svc already defaults PORT to 3011, so a
+  // same-machine dev run of both collided (NW-003 found this; same class
+  // of bug as the cv-inference-svc/map-tile-server 3006 collision fixed
+  // in Phase 3). 3016 is what vektor-web's api-client.ts has assumed for
+  // NEXT_PUBLIC_FIELD_INGEST_URL all along, so this moves the backend to
+  // meet the frontend rather than the other way round.
+  const port = Number(process.env.FIELD_INGEST_PORT ?? 3016);
   const app = buildFieldIngestApp({ producer, env: VEKTOR_ENV, deviceSharedSecret: secret });
   await app.listen({ port, host: "0.0.0.0" });
   stopFns.push(() => app.close());

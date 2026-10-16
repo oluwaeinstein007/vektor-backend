@@ -1,0 +1,172 @@
+{
+  "realm": "vektor",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      {
+        "name": "Viewer",
+        "description": "VEKTOR RBAC role: Viewer"
+      },
+      {
+        "name": "Field Operator",
+        "description": "VEKTOR RBAC role: Field Operator"
+      },
+      {
+        "name": "Analyst",
+        "description": "VEKTOR RBAC role: Analyst"
+      },
+      {
+        "name": "Logistics Officer",
+        "description": "VEKTOR RBAC role: Logistics Officer"
+      },
+      {
+        "name": "Commander",
+        "description": "VEKTOR RBAC role: Commander"
+      },
+      {
+        "name": "SuperAdmin",
+        "description": "VEKTOR RBAC role: SuperAdmin"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "vektor-web",
+      "name": "VEKTOR operator dashboard (dev)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:3020/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "viewer@vektor.test",
+      "firstName": "Viewer",
+      "lastName": "Dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "viewer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-vektor",
+        "Viewer"
+      ]
+    },
+    {
+      "username": "field-operator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "field-operator@vektor.test",
+      "firstName": "Field Operator",
+      "lastName": "Dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "field-operator",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-vektor",
+        "Field Operator"
+      ]
+    },
+    {
+      "username": "analyst",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "analyst@vektor.test",
+      "firstName": "Analyst",
+      "lastName": "Dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "analyst",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-vektor",
+        "Analyst"
+      ]
+    },
+    {
+      "username": "logistics-officer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "logistics-officer@vektor.test",
+      "firstName": "Logistics Officer",
+      "lastName": "Dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "logistics-officer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-vektor",
+        "Logistics Officer"
+      ]
+    },
+    {
+      "username": "commander",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "commander@vektor.test",
+      "firstName": "Commander",
+      "lastName": "Dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "commander",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-vektor",
+        "Commander"
+      ]
+    },
+    {
+      "username": "superadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "superadmin@vektor.test",
+      "firstName": "SuperAdmin",
+      "lastName": "Dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "superadmin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-vektor",
+        "SuperAdmin"
+      ]
+    }
+  ]
+}

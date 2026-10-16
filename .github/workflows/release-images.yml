@@ -1,0 +1,130 @@
+# NW-002: build and PUBLISH every service image to GHCR.
+#
+# Before this workflow existed, nothing in any repo published a container
+# image. ci.yml builds/lints/tests and produces no artifact; edge-arm64.yml
+# builds three images and throws them away (`push: false`). Meanwhile all
+# eleven Helm charts under services/*/deploy/helm/ point image.repository at
+# a `ghcr.io/oluwaeinstein007/vektor-*` tag, and every ArgoCD Application in
+# vektor-infra references those charts. The whole deployment chain referred
+# to images that did not exist.
+#
+# Tagging:
+#   push to master  -> :master, :sha-<short>
+#   tag v1.2.3      -> :1.2.3, :1.2, :latest, :sha-<short>
+#   manual dispatch -> :sha-<short> (plus whatever tag you pass)
+#
+# The Helm charts default image.tag to .Chart.AppVersion, so a release tag
+# should be accompanied by bumping appVersion in each Chart.yaml — see
+# services/DOCKERFILES.md.
+name: release-images
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      extra_tag:
+        description: "Additional tag to publish (e.g. rc1)"
+        required: false
+        type: string
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      # One service failing shouldn't block the other eleven from
+      # publishing — a partial release is recoverable, an all-or-nothing
+      # one just means re-running twelve builds for one flake.
+      fail-fast: false
+      matrix:
+        service:
+          - alert-svc
+          - audit-svc
+          - coa-svc
+          - cv-inference-svc
+          - edge-sync-svc
+          - fusion-svc
+          - geospatial-svc
+          - ingest-svc
+          - logistics-svc
+          - map-tile-server
+          - mavlink-bridge
+          - reporting-svc
+    steps:
+      # Both repos as siblings under one workspace root: the Dockerfiles
+      # build from the VEKTOR/ parent so the cross-repo
+      # `link:../../../vektor-proto` dependency resolves. See
+      # services/DOCKERFILES.md.
+      - uses: actions/checkout@v4
+        with:
+          path: vektor-backend
+      - uses: actions/checkout@v4
+        with:
+          repository: oluwaeinstein007/vektor-proto
+          path: vektor-proto
+
+      # The root .dockerignore lives in the VEKTOR/ parent on a developer
+      # machine; in CI the parent is the runner workspace, so it's copied
+      # into place. Without it the build context would include every
+      # node_modules and .git in both checkouts.
+      - name: Stage the shared .dockerignore
+        run: cp vektor-backend/.dockerignore .dockerignore 2>/dev/null || true
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/vektor-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=${{ inputs.extra_tag }},enable=${{ inputs.extra_tag != '' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: vektor-backend/services/${{ matrix.service }}/Dockerfile
+          # amd64 for the cloud profile, arm64 for the Jetson AGX Orin edge
+          # profile (§11.4). arm64 builds under QEMU and is slow; that cost
+          # is why this runs on master/tags rather than on every PR.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # A single job that fails if any image did not publish, so branch
+  # protection has one check to require rather than twelve.
+  release-complete:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: always()
+    steps:
+      - name: Fail if any image failed to publish
+        if: needs.build-and-push.result != 'success'
+        run: |
+          echo "one or more service images failed to build or push" >&2
+          exit 1
+      - run: echo "all service images published"
