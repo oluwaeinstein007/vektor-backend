@@ -175,7 +175,11 @@ services:
   # logistics-svc's pgr_dijkstra routing (SVC-019). A separate instance
   # because pgRouting isn't installed on the postgis image.
   routing-postgres:
-    image: pgrouting/pgrouting:16-3.4-3.6
+    # 16-3.4-3.6.1, not 16-3.4-3.6 — the latter has never existed on
+    # Docker Hub, so `stack:up:full` died with `manifest unknown` and
+    # logistics-svc's pgRouting tests had no instance to run against.
+    # The 16/PostGIS-3.4 line goes 16-3.4-3.5.0 then 16-3.4-3.6.1.
+    image: pgrouting/pgrouting:16-3.4-3.6.1
     container_name: vektor-dev-routing-postgres
     profiles: ["full"]
     environment:
