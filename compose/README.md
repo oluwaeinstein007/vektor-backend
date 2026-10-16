@@ -116,7 +116,29 @@ ffmpeg -stream_loop -1 -re -f lavfi -i testsrc=size=320x240:rate=15 \
 `-rtsp_transport tcp` is not optional — UDP RTSP sessions time out across a
 bridged Docker network.
 
-## Registering the Debezium connector (`--full` only)
+## IPv6 with no default route
+
+If `ip -6 route show default` prints nothing, this machine has no IPv6
+route while DNS still hands back AAAA records, so anything reaching a CDN
+fails instantly instead of falling back to IPv4. `.env.example` sets
+`NODE_OPTIONS=--dns-result-order=ipv4first`, which fixes the routing half.
+It is not a complete fix — a large download can still die mid-transfer with
+`UND_ERR_SOCKET` — but it turns a hard failure into a retryable one. This
+is the single cause behind three separate symptoms seen here: an apt mirror
+failure building `reporting-svc`, a Docker Hub TLS timeout pulling
+`pgrouting`, and `@vektor/qdrant`'s BGE-M3 fetch.
+
+## The Debezium connector (`--full`)
+
+`./scripts/dev-stack.sh up --full` now registers this automatically — it
+used to be a manual step, which meant `logistics-svc` could never pass from
+a cold start because it waited on CDC events from a connector nobody had
+created. The script also re-attaches `erp-postgres` to the compose network
+first: it can end up attached to no network at all if the network was
+recreated between two `up` invocations, and Debezium then fails to resolve
+the hostname.
+
+The equivalent by hand, if you need it:
 
 ```sh
 curl -X POST http://localhost:18083/connectors -H 'Content-Type: application/json' -d '{

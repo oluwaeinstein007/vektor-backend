@@ -40,6 +40,45 @@ wait_healthy() {
   return 1
 }
 
+# logistics-svc's CDC path consumes `dev.vektor.erp.public.inventory`, which
+# only exists once the Debezium connector is registered against Kafka
+# Connect's REST API. That used to be a manual curl documented in
+# compose/README.md, which meant logistics-svc could never pass from a cold
+# `stack:up:full` — it would sit waiting for CDC events from a connector
+# nobody had created. Registering it here makes `--full` actually complete.
+register_debezium() {
+  echo "==> registering the Debezium inventory connector"
+  for _ in $(seq 1 30); do
+    curl -fsS http://localhost:18083/connectors >/dev/null 2>&1 && break
+    sleep 2
+  done
+  # erp-postgres can end up attached to no network at all if the compose
+  # network was recreated between two `up` invocations — Debezium then fails
+  # to resolve the hostname and the connector dies on "connection attempt
+  # failed". Re-attaching is idempotent and cheap.
+  if ! docker inspect -f '{{json .NetworkSettings.Networks}}' vektor-dev-erp-postgres 2>/dev/null | grep -q vektor-dev; then
+    echo "    (re-attaching erp-postgres to the compose network)"
+    docker network connect --alias erp-postgres vektor-dev_default vektor-dev-erp-postgres 2>/dev/null || true
+  fi
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:18083/connectors \
+    -H 'Content-Type: application/json' -d '{
+      "name": "vektor-erp-inventory",
+      "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "database.hostname": "erp-postgres", "database.port": "5432",
+        "database.user": "postgres", "database.password": "vektor",
+        "database.dbname": "erp", "topic.prefix": "dev.vektor.erp",
+        "plugin.name": "pgoutput", "table.include.list": "public.inventory"
+      }
+    }' 2>/dev/null)
+  case "$code" in
+    201) echo "    connector created" ;;
+    409) echo "    connector already exists" ;;
+    *)   echo "    WARNING: connector registration returned HTTP $code — logistics-svc's CDC tests will not pass until this succeeds" ;;
+  esac
+}
+
 cmd_up() {
   local profiles=()
   [[ "${1:-}" == "--full" ]] && profiles=(--profile full)
@@ -62,6 +101,9 @@ cmd_up() {
   echo "  maildev    http://localhost:11080"
   echo "  mqtt       mqtt://localhost:11883"
   echo "  rtsp       rtsp://localhost:8554/<path>"
+  if [[ "${profiles[0]:-}" == "--profile" ]]; then
+    register_debezium
+  fi
   echo
   echo "next: cp compose/.env.example .env && set -a && . ./.env && set +a"
   echo "      ./scripts/dev-stack.sh token Commander"
