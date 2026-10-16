@@ -12,7 +12,8 @@ import { randomUUID } from "node:crypto";
 import { io as ioClient, type Socket } from "socket.io-client";
 import { createKafkaClient } from "@vektor/kafka";
 import { createRedisClient, WatermarkWindow, streamKey } from "@vektor/redis";
-import { createDb } from "@vektor/db";
+import { createDb, entities } from "@vektor/db";
+import { sql } from "drizzle-orm";
 import { createTestAuth } from "@vektor/auth/testing";
 import type { Entity, EntityUpdatedEvent } from "@vektor/shared";
 import { buildApp } from "../src/app.js";
@@ -210,4 +211,18 @@ test("AIS fix + EW/RF corroboration flow end-to-end through Kafka, Redis Streams
   for (const zone of zones.filter((z) => z.source_asset_id === asset.asset_id)) {
     await deleteNoStrikeZone(db, zone.zone_id);
   }
+
+  // Delete the entities this run fused. Without this the test leaves tracks
+  // behind, and the NEXT run fails with a mismatched entity_id: cross-sensor
+  // correlation matches a leftover track near the same position instead of
+  // the one just created. It reads as a flake and is a missing teardown —
+  // 41/41 against an empty table, 40/41 against a dirty one, same code.
+  //
+  // Scoped to this run's own uuid-suffixed sensor ids rather than a blanket
+  // DELETE: the dev database is shared with other services, other test
+  // suites and sometimes other sessions, and truncating it to make one test
+  // deterministic would just move the breakage somewhere else.
+  await db
+    .delete(entities)
+    .where(sql`${entities.source_sensors} && ARRAY[${aisSensorId}, ${ewrfSensorId}]::text[]`);
 });
