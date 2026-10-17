@@ -51,7 +51,13 @@ export function fromEwRf(event: EwRfEmission): TrackObservation | null {
   return {
     domain: "ewrf",
     sensor_id: event.sensor_id,
+    // RF geolocation resolves a position, never an altitude. The 0 is a
+    // placeholder for the EKF's 3-dimensional measurement vector, not a
+    // claim that the emitter is at sea level — alt_known says so, which
+    // stops the filter from pulling an airborne track's altitude down
+    // towards zero every time an emission correlates with it.
     position: { lat: event.estimated_position.lat, lon: event.estimated_position.lon, alt_m: 0 },
+    alt_known: false,
     classification: event.emitter_classification ?? "Emitter.Unclassified",
     affiliation: "UNKNOWN",
     confidence: 0.4, // single-receiver RF geolocation is inherently low-confidence

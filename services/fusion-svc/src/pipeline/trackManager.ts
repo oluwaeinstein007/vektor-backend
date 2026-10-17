@@ -199,7 +199,17 @@ export class TrackManager {
     if (best) {
       const { track, dtSeconds } = best;
       if (dtSeconds > 0) track.ekf.predict(dtSeconds);
-      track.ekf.update(obs.position);
+      // When the observation carries no real altitude, feed the filter its
+      // OWN current altitude for that dimension so the update is a no-op
+      // there rather than a measurement of zero. Without this, correlating
+      // an EW/RF emission (which never has an altitude) with an aircraft
+      // drags the track towards sea level: measured end-to-end, a 3,000m
+      // aircraft read 1,136m after one emission correlated with it. The
+      // correlation is correct and wanted; only the altitude contribution
+      // is spurious.
+      const measurement =
+        obs.alt_known === false ? { ...obs.position, alt_m: track.ekf.position.alt_m } : obs.position;
+      track.ekf.update(measurement);
       track.source_sensors.add(obs.sensor_id);
       track.source_domains.add(obs.domain);
       track.last_sensor_ts = obs.sensor_ts;

@@ -235,3 +235,30 @@ test("an ADS-B report with NO altitude is not treated as a sea-level contact", (
   assert.equal(noAlt.track.entity_id, ship.track.entity_id);
   assert.equal(noAlt.track.status, "CONFLICTED", "disagreeing classifications must still flag");
 });
+
+test("an altitude-less observation does not drag a track's altitude estimate", () => {
+  const m = manager();
+  const aircraft = m.correlate(
+    obs({ domain: "adsb", sensor_id: "adsb-1", classification: "Aircraft.ADSB", position: { lat: 10, lon: 20, alt_m: 3000 } }),
+  );
+  assert.ok(aircraft.track.ekf.position.alt_m > 2500);
+
+  // An EW/RF emission correlating with it must not be read as "measured at
+  // sea level". Measured end-to-end before this fix: 3,000m became 1,136m
+  // after one emission correlated.
+  const after = m.correlate(
+    obs({
+      domain: "ewrf",
+      sensor_id: "ewrf-1",
+      classification: "Aircraft.ADSB",
+      position: { lat: 10, lon: 20, alt_m: 0 },
+      alt_known: false,
+      sensor_ts: "2026-01-01T00:00:05.000Z",
+    }),
+  );
+  assert.equal(after.isNew, false, "the emission must still correlate");
+  assert.ok(
+    after.track.ekf.position.alt_m > 2500,
+    `altitude should survive the correlation, got ${after.track.ekf.position.alt_m}`,
+  );
+});
