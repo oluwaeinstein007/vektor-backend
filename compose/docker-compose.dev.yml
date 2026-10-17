@@ -188,6 +188,10 @@ services:
     ports: ["15434:5432"]
     volumes:
       - vektor-routing-data:/var/lib/postgresql/data
+      # The image bundles postgis/pgrouting but creates neither — see the
+      # script. Single-file mount, not a directory, so the image's own
+      # init scripts are not shadowed.
+      - ./routing-init/01-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d vektor_routing"]
       interval: 5s
@@ -207,6 +211,9 @@ services:
     ports: ["15433:5432"]
     volumes:
       - vektor-erp-data:/var/lib/postgresql/data
+      # No DDL for the `inventory` table exists anywhere in the repos, yet
+      # logistics-svc's CDC test inserts into it. See the script.
+      - ./erp-init/01-inventory-table.sql:/docker-entrypoint-initdb.d/01-inventory-table.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d erp"]
       interval: 5s
@@ -229,8 +236,12 @@ services:
       CONFIG_STORAGE_TOPIC: _connect_configs
       OFFSET_STORAGE_TOPIC: _connect_offsets
       STATUS_STORAGE_TOPIC: _connect_status
-      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      # Left at Connect's default (schemas ON, i.e. the { schema, payload }
+      # envelope). Setting these to "false" is what broke logistics-svc's
+      # CDC path: inventoryConsumer.ts was written and verified against the
+      # wrapped form, and every unwrapped message threw. The consumer now
+      # tolerates both shapes, but the compose default should still match
+      # what the code documents rather than quietly diverging from it.
     ports: ["18083:8083"]
 
 volumes:

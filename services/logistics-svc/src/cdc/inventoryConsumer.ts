@@ -47,12 +47,42 @@ export interface InventoryCdcOptions {
   onError?: (err: Error) => void;
 }
 
+/**
+ * Accepts BOTH Kafka Connect envelope shapes, because which one you get is
+ * a deployment setting rather than a property of Debezium:
+ *
+ *   schemas.enable=true  (Connect's default) -> { schema, payload: {op,...} }
+ *   schemas.enable=false                     -> { op, before, after, ... }
+ *
+ * This used to require the `payload` wrapper and threw on anything else.
+ * That was fine against the instance it was first verified on, which had
+ * schemas on, and then NW-003's compose set
+ * CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE=false — so every message threw and
+ * logistics-svc's CDC test hung until it timed out. The compose default is
+ * corrected alongside this, but tolerating both is the real fix: a customer
+ * ERP's Connect is not ours to configure, and failing on a converter
+ * setting is not a useful failure mode.
+ */
 function parseEnvelope(raw: string): DebeziumEnvelope {
   const parsed = JSON.parse(raw) as unknown;
-  if (typeof parsed !== "object" || parsed === null || !("payload" in parsed)) {
-    throw new Error("not a Kafka Connect JsonConverter envelope (missing payload)");
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error("CDC message is not a JSON object");
   }
-  return parsed as DebeziumEnvelope;
+  // Wrapped form: trust `payload` when present.
+  if ("payload" in parsed) {
+    const payload = (parsed as { payload: unknown }).payload;
+    if (typeof payload !== "object" || payload === null || !("op" in payload)) {
+      throw new Error("Kafka Connect envelope has a payload but no `op` field");
+    }
+    return parsed as DebeziumEnvelope;
+  }
+  // Unwrapped form: the message IS the payload. Checking for `op`
+  // specifically, not just "some object", so a genuinely malformed message
+  // still fails loudly instead of being silently treated as a no-op change.
+  if ("op" in parsed) {
+    return { payload: parsed as DebeziumEnvelope["payload"] };
+  }
+  throw new Error("not a Debezium change event (no `payload` wrapper and no `op` field)");
 }
 
 async function applyChange(db: VektorDb, envelope: DebeziumEnvelope): Promise<string | null> {
