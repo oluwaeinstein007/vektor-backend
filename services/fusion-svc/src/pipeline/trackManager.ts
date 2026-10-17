@@ -41,6 +41,13 @@ export interface Track {
   affiliation: Affiliation;
   status: TrackStatus;
   source_sensors: Set<string>;
+  /**
+   * Which sensor domains have contributed to this track. Needed by the
+   * vertical correlation gate, which has to consider BOTH sides: the gate
+   * for an incoming observation alone is not enough to decide whether its
+   * altitude may legitimately differ from the track's.
+   */
+  source_domains: Set<string>;
   trajectory: TrajectoryPoint[];
   first_detected: string;
   last_sensor_ts: string;
@@ -58,10 +65,51 @@ const DEFAULT_GATE_METERS: Record<string, number> = {
   iot: 300, // direct GPS-derived MAVLink telemetry — tightest gate of any domain
 };
 const DEFAULT_GATE_METERS_FALLBACK = 2000;
+
+/**
+ * Vertical gate, in metres. The horizontal gate above was the ONLY gate
+ * until 2026-10-17, which meant altitude never took part in correlation at
+ * all — `haversineMeters` is a great-circle distance and discards alt_m
+ * entirely. An aircraft at 3,000m overflying a vessel within ~1.5km
+ * horizontally was therefore a correlation candidate, and the two were
+ * merged into one track whose EKF settled at an averaged altitude
+ * belonging to neither platform. One of the two real contacts simply
+ * vanished from the operational picture, with no error and nothing visibly
+ * wrong with the surviving entity.
+ *
+ * This is checked against the EKF's PREDICTED altitude rather than its last
+ * measured one, so a genuinely climbing or descending aircraft still
+ * correlates with itself — the 6-state filter tracks v_up_mps and
+ * `extrapolate` already projects alt_m forward.
+ *
+ * `ewrf` is deliberately Infinity. RF geolocation produces a bearing/
+ * position estimate with no usable altitude, so `EwRfEmission.estimated_position`
+ * routinely carries alt 0 for an emitter that is actually airborne.
+ * Applying a vertical gate to it would break SVC-011's entire purpose —
+ * correlating an RF emission with the AIS or ADS-B track that produced it.
+ * The gate used for a candidate pair is the MAXIMUM of the two sides'
+ * gates, so an EW/RF track or observation on either side disables the
+ * vertical check for that pair while leaving it in force everywhere else.
+ */
+const DEFAULT_VERTICAL_GATE_METERS: Record<string, number> = {
+  // A vessel is at sea level. Anything a few hundred metres above it is
+  // not that vessel.
+  ais: 250,
+  // Barometric altitude is quantised and the EKF's vertical-rate estimate
+  // can drift over a long correlation gap, so this is deliberately loose —
+  // it only has to separate platforms, not measure them.
+  adsb: 1000,
+  // GPS-derived MAVLink telemetry; good vertical accuracy.
+  iot: 500,
+  ewrf: Number.POSITIVE_INFINITY, // see above
+};
+const DEFAULT_VERTICAL_GATE_METERS_FALLBACK = 1000;
 const MAX_TRAJECTORY_POINTS = 200;
 
 export interface TrackManagerOptions {
   gateMeters?: Record<string, number>;
+  /** Per-domain vertical gate in metres; see DEFAULT_VERTICAL_GATE_METERS. */
+  verticalGateMeters?: Record<string, number>;
   correlationMaxGapSeconds?: number; // beyond this gap, don't associate — spawn a new track instead
   lostTimeoutMs?: number; // beyond this gap with no update at all, the track is LOST
   ekfFactory: (initial: GeoPosition) => ExtendedKalmanFilter;
@@ -70,12 +118,14 @@ export interface TrackManagerOptions {
 export class TrackManager {
   private readonly tracks = new Map<string, Track>();
   private readonly gateMeters: Record<string, number>;
+  private readonly verticalGateMeters: Record<string, number>;
   private readonly correlationMaxGapSeconds: number;
   private readonly lostTimeoutMs: number;
   private readonly ekfFactory: (initial: GeoPosition) => ExtendedKalmanFilter;
 
   constructor(options: TrackManagerOptions) {
     this.gateMeters = { ...DEFAULT_GATE_METERS, ...options.gateMeters };
+    this.verticalGateMeters = { ...DEFAULT_VERTICAL_GATE_METERS, ...options.verticalGateMeters };
     this.correlationMaxGapSeconds = options.correlationMaxGapSeconds ?? 300;
     this.lostTimeoutMs = options.lostTimeoutMs ?? 5 * 60 * 1000;
     this.ekfFactory = options.ekfFactory;
@@ -83,6 +133,20 @@ export class TrackManager {
 
   private gateFor(domain: string): number {
     return this.gateMeters[domain] ?? DEFAULT_GATE_METERS_FALLBACK;
+  }
+
+  /**
+   * The vertical gate for a candidate pair: the loosest of the observation's
+   * domain and every domain already contributing to the track. Taking the
+   * maximum (rather than the observation's alone) is what keeps an EW/RF
+   * track correlatable with an aircraft — see DEFAULT_VERTICAL_GATE_METERS.
+   */
+  private verticalGateFor(obsDomain: string, trackDomains: Iterable<string>): number {
+    let gate = this.verticalGateMeters[obsDomain] ?? DEFAULT_VERTICAL_GATE_METERS_FALLBACK;
+    for (const d of trackDomains) {
+      gate = Math.max(gate, this.verticalGateMeters[d] ?? DEFAULT_VERTICAL_GATE_METERS_FALLBACK);
+    }
+    return gate;
   }
 
   /** Correlates one observation against live tracks, updating the matched track's EKF or spawning a new one. */
@@ -96,7 +160,14 @@ export class TrackManager {
 
       const predicted = extrapolate(track.ekf.position, track.ekf.velocity, dtSeconds);
       const distanceM = haversineMeters(predicted, obs.position);
-      if (distanceM <= this.gateFor(obs.domain) && (!best || distanceM < best.distanceM)) {
+      if (distanceM > this.gateFor(obs.domain)) continue;
+
+      // Vertical gate. Without this an aircraft overflying a ship merges
+      // into the ship's track — see DEFAULT_VERTICAL_GATE_METERS.
+      const verticalM = Math.abs(predicted.alt_m - obs.position.alt_m);
+      if (verticalM > this.verticalGateFor(obs.domain, track.source_domains)) continue;
+
+      if (!best || distanceM < best.distanceM) {
         best = { track, distanceM, dtSeconds };
       }
     }
@@ -106,6 +177,7 @@ export class TrackManager {
       if (dtSeconds > 0) track.ekf.predict(dtSeconds);
       track.ekf.update(obs.position);
       track.source_sensors.add(obs.sensor_id);
+      track.source_domains.add(obs.domain);
       track.last_sensor_ts = obs.sensor_ts;
       track.trajectory.push({ lat: track.ekf.position.lat, lon: track.ekf.position.lon, ts: obs.sensor_ts });
       if (track.trajectory.length > MAX_TRAJECTORY_POINTS) track.trajectory.shift();
@@ -114,7 +186,18 @@ export class TrackManager {
       // decided is the same physical track — flag for analyst review rather
       // than silently picking one.
       const conflicting = obs.classification !== track.classification && obs.confidence > 0.5 && track.confidence > 0.5;
-      track.status = conflicting ? "CONFLICTED" : "ACTIVE";
+      // LATCHED, not recomputed. This used to be
+      //   track.status = conflicting ? "CONFLICTED" : "ACTIVE"
+      // which cleared the flag on the very next agreeing observation. Under
+      // continuous dual-sensor input — the normal case — that meant the
+      // flag flickered and whichever observation happened to arrive last
+      // decided the stored status, so an operator would essentially never
+      // see it. REQ-3.5 asks for disagreement to be flagged for analyst
+      // review; a flag that erases itself does not do that. Once two
+      // sensors have disagreed about what a track is, that happened, and
+      // it stays visible until someone looks.
+      if (conflicting) track.status = "CONFLICTED";
+      else if (track.status !== "CONFLICTED") track.status = "ACTIVE";
       track.confidence = Math.max(track.confidence, obs.confidence);
       if (obs.affiliation !== "UNKNOWN") track.affiliation = obs.affiliation;
 
@@ -131,6 +214,7 @@ export class TrackManager {
       affiliation: obs.affiliation,
       status: "ACTIVE",
       source_sensors: new Set([obs.sensor_id]),
+      source_domains: new Set([obs.domain]),
       trajectory: [{ lat: obs.position.lat, lon: obs.position.lon, ts: obs.sensor_ts }],
       first_detected: obs.sensor_ts,
       last_sensor_ts: obs.sensor_ts,

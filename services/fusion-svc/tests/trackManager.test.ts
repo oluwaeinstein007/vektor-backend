@@ -98,3 +98,109 @@ test("evictStale marks a track LOST once it exceeds the timeout and stops it fro
   const after = tm.correlate(obs({ sensor_ts: "2026-01-01T00:02:05.000Z" }));
   assert.equal(after.isNew, true);
 });
+
+// ---------------------------------------------------------------------------
+// Vertical correlation gate. Regression tests for a real bug found 2026-10-17
+// by driving fusion-svc with a scenario (NW-020): the correlation gate was
+// horizontal distance only, so an aircraft overflying a vessel was merged
+// into the vessel's track and one of the two real contacts disappeared.
+// ---------------------------------------------------------------------------
+
+test("an aircraft at altitude is NOT merged into a surface vessel directly beneath it", () => {
+  const m = manager();
+
+  // A vessel at sea level.
+  const ship = m.correlate(
+    obs({ domain: "ais", sensor_id: "ais-ship", classification: "Vessel.AIS", position: { lat: 10, lon: 20, alt_m: 0 } }),
+  );
+  assert.equal(ship.isNew, true);
+
+  // An aircraft at 3,000m on the SAME ground track — zero horizontal
+  // separation, so the old horizontal-only gate matched it immediately.
+  const aircraft = m.correlate(
+    obs({
+      domain: "adsb",
+      sensor_id: "adsb-plane",
+      classification: "Aircraft.ADSB",
+      position: { lat: 10, lon: 20, alt_m: 3000 },
+      sensor_ts: "2026-01-01T00:00:05.000Z",
+    }),
+  );
+
+  assert.equal(aircraft.isNew, true, "the aircraft must spawn its own track, not join the vessel's");
+  assert.notEqual(aircraft.track.entity_id, ship.track.entity_id);
+
+  // And neither track's altitude is the average of the two. 1508.8 was the
+  // observed symptom: an altitude belonging to neither platform.
+  assert.ok(Math.abs(ship.track.ekf.position.alt_m) < 100, "vessel stays at sea level");
+  assert.ok(aircraft.track.ekf.position.alt_m > 2500, "aircraft stays at altitude");
+});
+
+test("the same aircraft climbing still correlates with itself across a gap", () => {
+  const m = manager();
+  const first = m.correlate(
+    obs({ domain: "adsb", sensor_id: "adsb-1", classification: "Aircraft.ADSB", position: { lat: 10, lon: 20, alt_m: 1000 } }),
+  );
+  // 30s later, 150m higher — a normal climb. The gate is checked against
+  // the EKF's PREDICTED altitude, so this must still associate.
+  const second = m.correlate(
+    obs({
+      domain: "adsb",
+      sensor_id: "adsb-1",
+      classification: "Aircraft.ADSB",
+      position: { lat: 10, lon: 20, alt_m: 1150 },
+      sensor_ts: "2026-01-01T00:00:30.000Z",
+    }),
+  );
+  assert.equal(second.isNew, false, "a climbing aircraft must not be split into two tracks");
+  assert.equal(second.track.entity_id, first.track.entity_id);
+});
+
+test("an EW/RF emission still correlates with an airborne track despite a meaningless altitude", () => {
+  const m = manager();
+  const aircraft = m.correlate(
+    obs({ domain: "adsb", sensor_id: "adsb-1", classification: "Aircraft.ADSB", position: { lat: 10, lon: 20, alt_m: 3000 } }),
+  );
+  // RF geolocation yields no usable altitude — estimated_position carries 0
+  // for an emitter that is genuinely at 3,000m. SVC-011 exists to correlate
+  // exactly this, so the vertical gate must not block it.
+  const emission = m.correlate(
+    obs({
+      domain: "ewrf",
+      sensor_id: "ewrf-1",
+      classification: "Aircraft.ADSB",
+      position: { lat: 10, lon: 20, alt_m: 0 },
+      sensor_ts: "2026-01-01T00:00:05.000Z",
+    }),
+  );
+  assert.equal(emission.isNew, false, "EW/RF must still correlate — its altitude is not meaningful");
+  assert.equal(emission.track.entity_id, aircraft.track.entity_id);
+});
+
+test("CONFLICTED latches — a later agreeing observation does not erase it", () => {
+  const m = manager();
+  m.correlate(obs({ sensor_id: "ais-1", classification: "Vessel.AIS", position: { lat: 10, lon: 20, alt_m: 0 } }));
+
+  // A second sensor disagrees about what this is.
+  const conflicted = m.correlate(
+    obs({
+      sensor_id: "ais-2",
+      classification: "Vessel.Warship",
+      position: { lat: 10, lon: 20, alt_m: 0 },
+      sensor_ts: "2026-01-01T00:00:05.000Z",
+    }),
+  );
+  assert.equal(conflicted.track.status, "CONFLICTED");
+
+  // A third, agreeing observation used to reset this to ACTIVE, which is
+  // how the flag became invisible under continuous input.
+  const after = m.correlate(
+    obs({
+      sensor_id: "ais-1",
+      classification: "Vessel.Warship",
+      position: { lat: 10, lon: 20, alt_m: 0 },
+      sensor_ts: "2026-01-01T00:00:10.000Z",
+    }),
+  );
+  assert.equal(after.track.status, "CONFLICTED", "disagreement happened; it must stay visible until an analyst clears it");
+});
