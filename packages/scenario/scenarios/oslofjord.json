@@ -1,0 +1,61 @@
+{
+  "name": "Oslofjord approach",
+  "description": "One hour in the Oslofjord: a cargo vessel transits inbound and berths, a ferry runs a repeating crossing with loading dwells at each end, and a patrol aircraft flies a rectangular orbit above. Coordinates sit inside the real Kystverket AIS coverage this project already ingests, so the picture looks right on the dashboard's default view. Every leg is speed-checked by `--validate`.",
+  "seed": 42,
+  "duration_s": 3600,
+  "sensor_id": "sim-kystverket-1",
+  "entities": [
+    {
+      "id": "cargo-inbound",
+      "kind": "ais",
+      "mmsi": "257123456",
+      "emit_interval_s": 10,
+      "position_jitter_m": 8,
+      "waypoints": [
+        { "t": 0, "lat": 59.7000, "lon": 10.4500 },
+        { "t": 1800, "lat": 59.8000, "lon": 10.5200 },
+        { "t": 2800, "lat": 59.8450, "lon": 10.5600 },
+        { "t": 3600, "lat": 59.8450, "lon": 10.5600 }
+      ]
+    },
+    {
+      "id": "ferry-crossing",
+      "kind": "ais",
+      "mmsi": "257987654",
+      "emit_interval_s": 5,
+      "position_jitter_m": 4,
+      "waypoints": [
+        { "t": 0, "lat": 59.7400, "lon": 10.5800 },
+        { "t": 600, "lat": 59.7400, "lon": 10.6600 },
+        { "t": 900, "lat": 59.7400, "lon": 10.6600 },
+        { "t": 1500, "lat": 59.7400, "lon": 10.5800 },
+        { "t": 1800, "lat": 59.7400, "lon": 10.5800 },
+        { "t": 2400, "lat": 59.7400, "lon": 10.6600 },
+        { "t": 2700, "lat": 59.7400, "lon": 10.6600 },
+        { "t": 3300, "lat": 59.7400, "lon": 10.5800 },
+        { "t": 3600, "lat": 59.7400, "lon": 10.5800 }
+      ]
+    },
+    {
+      "id": "patrol-air",
+      "kind": "adsb",
+      "icao24": "4B1A2C",
+      "callsign": "NOR01",
+      "emit_interval_s": 4,
+      "position_jitter_m": 20,
+      "waypoints": [
+        { "t": 0, "lat": 59.7000, "lon": 10.4000, "alt_m": 1500 },
+        { "t": 450, "lat": 60.1000, "lon": 10.4000, "alt_m": 1500 },
+        { "t": 750, "lat": 60.1000, "lon": 10.9500, "alt_m": 1500 },
+        { "t": 1200, "lat": 59.7000, "lon": 10.9500, "alt_m": 1200 },
+        { "t": 1500, "lat": 59.7000, "lon": 10.4000, "alt_m": 1200 },
+        { "t": 1950, "lat": 60.1000, "lon": 10.4000, "alt_m": 1200 },
+        { "t": 2250, "lat": 60.1000, "lon": 10.9500, "alt_m": 1500 },
+        { "t": 2700, "lat": 59.7000, "lon": 10.9500, "alt_m": 1500 },
+        { "t": 3000, "lat": 59.7000, "lon": 10.4000, "alt_m": 1500 },
+        { "t": 3450, "lat": 60.1000, "lon": 10.4000, "alt_m": 1500 },
+        { "t": 3600, "lat": 60.1000, "lon": 10.6750, "alt_m": 1500 }
+      ]
+    }
+  ]
+}
