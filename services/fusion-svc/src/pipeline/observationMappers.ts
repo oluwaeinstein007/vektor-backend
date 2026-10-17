@@ -33,7 +33,12 @@ export function fromAdsb(event: AdsbPositionReport): TrackObservation | null {
   return {
     domain: "adsb",
     sensor_id: event.sensor_id,
+    // altitude_ft is nullable in the contract. The 0 below is a
+    // placeholder for the EKF, NOT a claim of sea level — alt_known says
+    // which it is, so the vertical correlation gate can decline to use it
+    // rather than treating an altitude-less aircraft as a surface contact.
     position: { lat: event.lat, lon: event.lon, alt_m: (event.altitude_ft ?? 0) * FEET_TO_METERS },
+    alt_known: event.altitude_ft !== null,
     classification: "Aircraft.ADSB",
     affiliation: "UNKNOWN",
     confidence: 0.9,

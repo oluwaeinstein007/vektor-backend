@@ -204,3 +204,34 @@ test("CONFLICTED latches — a later agreeing observation does not erase it", ()
   );
   assert.equal(after.track.status, "CONFLICTED", "disagreement happened; it must stay visible until an analyst clears it");
 });
+
+test("an ADS-B report with NO altitude is not treated as a sea-level contact", () => {
+  const m = manager();
+  const ship = m.correlate(
+    obs({ domain: "ais", sensor_id: "ais-ship", classification: "Vessel.AIS", position: { lat: 10, lon: 20, alt_m: 0 } }),
+  );
+
+  // AdsbPositionReport.altitude_ft is nullable and the mapper coerces null
+  // to 0. Without alt_known that placeholder is indistinguishable from a
+  // genuine sea-level fix, so the vertical gate would wave it through and
+  // merge an aircraft into the vessel — the original bug, via a different
+  // route. alt_known:false makes the gate decline to judge instead.
+  const noAlt = m.correlate(
+    obs({
+      domain: "adsb",
+      sensor_id: "adsb-noalt",
+      classification: "Aircraft.ADSB",
+      position: { lat: 10, lon: 20, alt_m: 0 },
+      alt_known: false,
+      sensor_ts: "2026-01-01T00:00:05.000Z",
+    }),
+  );
+
+  // It still correlates — we cannot prove it is a different platform, and
+  // splitting on invented data would be the worse error. What matters is
+  // that the decision is made on the classification conflict, which is
+  // real, rather than on a fabricated altitude.
+  assert.equal(noAlt.isNew, false);
+  assert.equal(noAlt.track.entity_id, ship.track.entity_id);
+  assert.equal(noAlt.track.status, "CONFLICTED", "disagreeing classifications must still flag");
+});

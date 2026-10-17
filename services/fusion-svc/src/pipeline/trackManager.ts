@@ -25,6 +25,21 @@ export interface TrackObservation {
   affiliation: Affiliation;
   confidence: number;
   sensor_ts: string;
+  /**
+   * Whether `position.alt_m` is a real measurement. False means the sensor
+   * reported no altitude and the 0 in `position` is a placeholder, not a
+   * claim of sea level — the vertical gate must then not use it.
+   *
+   * This exists because `AdsbPositionReport.altitude_ft` is nullable and
+   * the mapper coerces null to 0. Without this flag an altitude-less
+   * ADS-B report looks exactly like a surface contact, and would merge
+   * into a vessel's track — reintroducing the very bug the vertical gate
+   * was added to fix, through a different door.
+   *
+   * Defaults to true when omitted, so existing callers keep their
+   * behaviour and only the genuinely-unknown case opts out.
+   */
+  alt_known?: boolean;
 }
 
 export interface TrajectoryPoint {
@@ -164,8 +179,17 @@ export class TrackManager {
 
       // Vertical gate. Without this an aircraft overflying a ship merges
       // into the ship's track — see DEFAULT_VERTICAL_GATE_METERS.
-      const verticalM = Math.abs(predicted.alt_m - obs.position.alt_m);
-      if (verticalM > this.verticalGateFor(obs.domain, track.source_domains)) continue;
+      //
+      // Skipped entirely when the observation carries no real altitude:
+      // refusing to correlate on the strength of a placeholder 0 would be
+      // asserting sea level for something that simply did not report. The
+      // cost is that an altitude-less report can still merge with a
+      // surface track, which is the pre-existing behaviour; the benefit is
+      // that we never split a track on invented data.
+      if (obs.alt_known !== false) {
+        const verticalM = Math.abs(predicted.alt_m - obs.position.alt_m);
+        if (verticalM > this.verticalGateFor(obs.domain, track.source_domains)) continue;
+      }
 
       if (!best || distanceM < best.distanceM) {
         best = { track, distanceM, dtSeconds };
