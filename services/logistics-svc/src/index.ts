@@ -37,7 +37,9 @@ async function main(): Promise<void> {
   logger.info({ port: PORT }, "logistics-svc HTTP listening");
 
   const kafka = createKafkaClient({ clientId: "logistics-svc", brokers: KAFKA_BROKERS.split(",") });
-  const consumer = kafka.consumer({ groupId: "logistics-svc" });
+  // Namespaced by env — see fusion-svc/src/index.ts for why. This service
+  // had no VEKTOR_ENV at all, so it took the default.
+  const consumer = kafka.consumer({ groupId: `${process.env.VEKTOR_ENV ?? "dev"}.logistics-svc` });
   await consumer.connect();
   const cdcPromise = runInventoryCdcConsumer({
     consumer,

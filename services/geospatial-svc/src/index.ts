@@ -44,7 +44,8 @@ if (KAFKA_BROKERS) {
     // sharing a group would split the partitions between them, so each
     // would see only a fraction of the entities and silently record a
     // fraction of the history.
-    groupId: "geospatial-svc-history-projector",
+    // Namespaced by env — see fusion-svc/src/index.ts for why.
+    groupId: `${VEKTOR_ENV}.geospatial-svc-history-projector`,
     onSkipped: (reason, detail) => app.log.warn({ reason, detail }, "history projector skipped a message"),
   })
     .then((started) => {

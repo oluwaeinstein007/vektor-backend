@@ -31,14 +31,26 @@ async function main(): Promise<void> {
   const db = createDb(DATABASE_URL!);
   const redis = createRedisClient(REDIS_URL);
   const kafka = createKafkaClient({ clientId: "fusion-svc", brokers: KAFKA_BROKERS.split(",") });
-  const consumer = kafka.consumer({ groupId: "fusion-svc" });
+// Consumer group ids are namespaced by VEKTOR_ENV. Without this,
+// VEKTOR_ENV isolates the TOPICS but not the GROUP, so two instances on one
+// broker — a `dev` stack and a `perf` stack, say — join the same group and
+// Kafka splits the partitions between them. Each then silently receives a
+// subset of the other's topics and none of its own. Observed, not
+// theoretical: a verification run produced zero entities because a peer's
+// `perf` instance held three of the five partitions. edge-sync-svc already
+// namespaced its group by node id for the same class of reason.
+//
+// NOTE: changing a group id resets its committed offsets, so a deployment
+// that upgrades past this starts from the configured auto-offset position
+// once.
+  const consumer = kafka.consumer({ groupId: `${VEKTOR_ENV}.fusion-svc` });
   await consumer.connect();
 
   // Own Consumer instance: a single kafkajs Consumer can only run one
   // eachMessage handler, and this topic's raw-bytes messages need a
   // different decode path than the JSON domains ingestConsumers.ts handles
   // (see videoFrameConsumer.ts's header comment).
-  const videoFrameConsumer = kafka.consumer({ groupId: "fusion-svc-video-frame" });
+  const videoFrameConsumer = kafka.consumer({ groupId: `${VEKTOR_ENV}.fusion-svc-video-frame` });
   await videoFrameConsumer.connect();
 
   const authOptions = authOptionsFromEnv();
