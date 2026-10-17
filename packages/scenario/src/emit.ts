@@ -70,14 +70,20 @@ export function toEvent(entity: ScenarioEntity, state: TrackState, opts: EmitOpt
         sensor_id: opts.sensorId,
         icao24: entity.icao24!,
         callsign: entity.callsign ?? null,
-        altitude_ft: round(state.alt_m * 3.280839895, 0),
+        // null, not 0, when the scenario never stated an altitude.
+        // fusion-svc reads a null here as "not reported" (alt_known=false)
+        // and declines to use it; a 0 would be a claim of sea level and
+        // would merge this aircraft into any vessel beneath it.
+        altitude_ft: state.alt_known ? round(state.alt_m * 3.280839895, 0) : null,
         ground_speed_kts: round(state.speed_mps * MPS_TO_KNOTS, 1),
         track_deg: round(state.heading_deg, 1),
         lat: state.lat,
         lon: state.lon,
         vertical_rate_fpm: 0,
         squawk: null,
-        on_ground: state.alt_m < 1,
+        // Cannot claim an aircraft is on the ground from an altitude the
+        // scenario never gave.
+        on_ground: state.alt_known ? state.alt_m < 1 : false,
         sensor_ts: ts,
         kafka_ts: ts,
       });

@@ -287,3 +287,73 @@ test("changing only the seed changes the jitter but not the track", () => {
   // Still the same leg, so within jitter range of each other.
   assert.ok(Math.abs(a.lat - b.lat) < 0.01);
 });
+
+// --------------------------------------------------- altitude provenance
+
+test("an unstated altitude is reported as null, not as sea level", () => {
+  // The provenance defect fusion-svc was fixed for (fromAdsb/fromEwRf
+  // asserting 0 for "not reported"), reproduced one layer upstream: a
+  // waypoint with no alt_m means the author did not say, and emitting 0
+  // would merge this aircraft into any vessel beneath it.
+  const scenario = parseScenario({
+    name: "no-alt",
+    seed: 1,
+    duration_s: 120,
+    sensor_id: "s",
+    entities: [
+      {
+        id: "a",
+        kind: "adsb",
+        icao24: "ABC123",
+        emit_interval_s: 60,
+        waypoints: [
+          { t: 0, lat: 50.0, lon: 1.0 },
+          { t: 120, lat: 50.1, lon: 1.0 },
+        ],
+      },
+    ],
+  });
+  const entity = scenario.entities[0]!;
+  const state = stateAt(entity, 60, scenario.seed)!;
+  assert.equal(state.alt_known, false);
+
+  const event = toEvent(entity, state, {
+    sensorId: "s",
+    sensorTs: new Date(),
+    nextEventId: () => "00000000-0000-4000-8000-000000000001",
+  });
+  const value = event.value as { altitude_ft: number | null; on_ground: boolean };
+  assert.equal(value.altitude_ft, null, "unstated altitude must be null, not 0");
+  // Nor can it claim the aircraft is on the ground.
+  assert.equal(value.on_ground, false);
+});
+
+test("a stated altitude is still reported normally", () => {
+  const scenario = parseScenario({
+    name: "with-alt",
+    seed: 1,
+    duration_s: 120,
+    sensor_id: "s",
+    entities: [
+      {
+        id: "a",
+        kind: "adsb",
+        icao24: "ABC123",
+        emit_interval_s: 60,
+        waypoints: [
+          { t: 0, lat: 50.0, lon: 1.0, alt_m: 3000 },
+          { t: 120, lat: 50.1, lon: 1.0, alt_m: 3000 },
+        ],
+      },
+    ],
+  });
+  const entity = scenario.entities[0]!;
+  const state = stateAt(entity, 60, scenario.seed)!;
+  assert.equal(state.alt_known, true);
+  const event = toEvent(entity, state, {
+    sensorId: "s",
+    sensorTs: new Date(),
+    nextEventId: () => "00000000-0000-4000-8000-000000000001",
+  });
+  assert.equal((event.value as { altitude_ft: number }).altitude_ft, 9843);
+});

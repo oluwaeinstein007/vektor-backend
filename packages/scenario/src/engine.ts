@@ -19,6 +19,17 @@ export interface TrackState {
   alt_m: number;
   speed_mps: number;
   heading_deg: number;
+  /**
+   * Whether the scenario actually specified an altitude for this leg.
+   *
+   * A waypoint without `alt_m` means the author did not say, which is NOT
+   * the same as saying sea level. Emitting 0 for it would assert a
+   * measurement the scenario never made — the exact provenance defect that
+   * `fromAdsb`/`fromEwRf` were fixed for in fusion-svc, reproduced one
+   * layer upstream in the tool used to find it. `emit.ts` reports a null
+   * altitude when this is false.
+   */
+  alt_known: boolean;
 }
 
 /**
@@ -52,6 +63,9 @@ export function stateAt(entity: ScenarioEntity, t: number, seed: number): TrackS
   const heading = legM < 0.5 ? headingInto(wps, i) : bearingDeg(a, b);
 
   const alt = interpolateAlt(a.alt_m, b.alt_m, fraction);
+  // Known if EITHER bounding waypoint gave one — interpolating from a
+  // stated altitude toward an unstated one still rests on a real value.
+  const altKnown = a.alt_m !== undefined || b.alt_m !== undefined;
 
   if (entity.position_jitter_m > 0) {
     const rand = streamFor(seed, entity.id);
@@ -76,6 +90,7 @@ export function stateAt(entity: ScenarioEntity, t: number, seed: number): TrackS
     alt_m: alt,
     speed_mps: speedMps,
     heading_deg: heading,
+    alt_known: altKnown,
   };
 }
 
