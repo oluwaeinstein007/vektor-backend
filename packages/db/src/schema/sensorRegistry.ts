@@ -3,7 +3,8 @@
 // mapper-not-column-copy discipline as every other table: fusion-svc's
 // mappers translate rows into the wire SensorRegistration/SensorHealth
 // contracts, never `as`.
-import { pgTable, text, real, geometry, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, real, geometry, timestamp, uuid } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const sensorRegistry = pgTable("sensor_registry", {
   // sensor_id is operator-assigned at the adapter config level (ingest-svc's
@@ -11,6 +12,7 @@ export const sensorRegistry = pgTable("sensor_registry", {
   // generated uuid, since every domain schema (AisPositionReport, etc.)
   // already keys on this same string.
   sensor_id: text("sensor_id").primaryKey(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   sensor_type: text("sensor_type").notNull(),
   label: text("label").notNull(),
   position: geometry("position", { type: "point", srid: 4326 }).notNull(),

@@ -14,9 +14,11 @@
 // mapping (including the mgrs computation) lives in each consuming
 // service — see services/geospatial-svc/src/mappers/entity.ts.
 import { pgTable, uuid, text, real, geometry, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const entities = pgTable("entities", {
   entity_id: uuid("entity_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   classification: text("classification").notNull(),
   confidence: real("confidence").notNull(),
   status: text("status").notNull().default("ACTIVE"),

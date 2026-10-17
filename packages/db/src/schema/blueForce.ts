@@ -3,9 +3,11 @@
 // mapper-not-column-copy discipline as entities.ts: services/fusion-svc's
 // mappers translate rows into the wire contract, never `as`.
 import { pgTable, uuid, text, real, geometry, customType, timestamp } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const blueForceAssets = pgTable("blue_force_assets", {
   asset_id: uuid("asset_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   callsign: text("callsign").notNull(),
   classification: text("classification").notNull(),
   position: geometry("position", { type: "point", srid: 4326 }).notNull(),
@@ -33,6 +35,7 @@ const geometryPolygon = customType<{ data: string }>({
 
 export const noStrikeZones = pgTable("no_strike_zones", {
   zone_id: uuid("zone_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   name: text("name").notNull(),
   source: text("source").notNull(),
   // FK left off deliberately: a BLUE_FORCE_BUFFER zone's asset can be

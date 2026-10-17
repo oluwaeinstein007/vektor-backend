@@ -71,6 +71,13 @@
       "when": 1792123111545,
       "tag": "0009_mighty_moon_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792300000000,
+      "tag": "0011_organisation_scoping",
+      "breakpoints": true
     }
   ]
 }

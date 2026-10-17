@@ -5,9 +5,11 @@
 // updated by the approve/reject workflow), so there's no query that needs to
 // filter/join on a single option's fields independently of its parent COA.
 import { pgTable, uuid, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const coas = pgTable("coas", {
   coa_id: uuid("coa_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   situation_id: uuid("situation_id").notNull(),
   options: jsonb("options").notNull(),
   selected_option: integer("selected_option"),

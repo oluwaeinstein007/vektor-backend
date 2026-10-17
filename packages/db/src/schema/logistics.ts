@@ -3,9 +3,11 @@
 // append-only (one row per Debezium CDC event) and is the sole input to
 // SVC-018's linear-regression forecaster — see logistics-svc/src/forecast.
 import { pgTable, uuid, text, real, timestamp, boolean } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const inventoryItems = pgTable("inventory_items", {
   item_id: uuid("item_id").primaryKey(), // same UUID as the upstream ERP row — no VEKTOR-side identity of its own
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   sku: text("sku").notNull(),
   name: text("name").notNull(),
   category: text("category").notNull(),
@@ -17,6 +19,7 @@ export const inventoryItems = pgTable("inventory_items", {
 
 export const inventoryHistory = pgTable("inventory_history", {
   id: uuid("id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   item_id: uuid("item_id").notNull(),
   quantity: real("quantity").notNull(),
   ts: timestamp("ts", { withTimezone: true }).notNull(),
@@ -24,6 +27,7 @@ export const inventoryHistory = pgTable("inventory_history", {
 
 export const inventoryForecasts = pgTable("inventory_forecasts", {
   item_id: uuid("item_id").primaryKey(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   quantity: real("quantity").notNull(),
   depletion_rate_per_hour: real("depletion_rate_per_hour").notNull(),
   hours_to_stockout: real("hours_to_stockout"),

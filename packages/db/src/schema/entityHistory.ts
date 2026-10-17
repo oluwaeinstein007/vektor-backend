@@ -30,11 +30,13 @@
 // the 90% of the benefit that needs no new extension; Timescale remains the
 // upgrade path if ingest volume ever demands it.
 import { pgTable, uuid, text, real, geometry, timestamp, index } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const entityHistory = pgTable(
   "entity_history",
   {
     entity_id: uuid("entity_id").notNull(),
+    org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
     // Observation time, not write time. The projector takes this from the
     // event's own last_updated so a replayed or backfilled topic produces
     // the same history as a live one — a write-time column would make

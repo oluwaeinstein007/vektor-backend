@@ -3,6 +3,7 @@
 // the customType pattern from blueForce.ts's no_strike_zones — drizzle-orm's
 // built-in geometry() helper is point-only, see that file's comment.
 import { pgTable, uuid, text, boolean, jsonb, timestamp, customType } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 const geometryPolygon = customType<{ data: string }>({
   dataType() {
@@ -12,6 +13,7 @@ const geometryPolygon = customType<{ data: string }>({
 
 export const geofenceZones = pgTable("geofence_zones", {
   zone_id: uuid("zone_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   name: text("name").notNull(),
   trigger: text("trigger").notNull(), // ENTRY | EXIT | BOTH
   severity: text("severity").notNull(), // LOW | MEDIUM | HIGH | CRITICAL
@@ -25,6 +27,7 @@ export const geofenceZones = pgTable("geofence_zones", {
 
 export const alerts = pgTable("alerts", {
   alert_id: uuid("alert_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   type: text("type").notNull(), // GEOFENCE | ANOMALY | ESCALATION | SENSOR_HEALTH
   entity_id: uuid("entity_id"),
   severity: text("severity").notNull(),
@@ -42,6 +45,7 @@ export const alerts = pgTable("alerts", {
 // status is later changed again.
 export const alertActions = pgTable("alert_actions", {
   action_id: uuid("action_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   alert_id: uuid("alert_id").notNull(),
   action: text("action").notNull(), // ACKNOWLEDGE | ESCALATE | DISMISS
   operator_id: text("operator_id").notNull(),

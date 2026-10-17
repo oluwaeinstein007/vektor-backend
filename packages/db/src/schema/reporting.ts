@@ -4,9 +4,11 @@
 // bytea in Postgres: a generated PDF/PPTX has no reason to round-trip
 // through the database itself, only its metadata does.
 import { pgTable, uuid, text, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 export const reports = pgTable("reports", {
   report_id: uuid("report_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   format: text("format").notNull(), // PDF | PPTX
   status: text("status").notNull().default("PENDING"),
   file_path: text("file_path"),
@@ -17,6 +19,7 @@ export const reports = pgTable("reports", {
 
 export const reportSchedules = pgTable("report_schedules", {
   schedule_id: uuid("schedule_id").primaryKey().defaultRandom(),
+  org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
   cron_expr: text("cron_expr").notNull(),
   format: text("format").notNull(),
   recipients: jsonb("recipients").notNull(), // string[]

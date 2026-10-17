@@ -6,8 +6,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import postgres from "postgres";
+import { sql } from "drizzle-orm";
 import { createDb, type VektorDb } from "../src/client.js";
 import { auditLog } from "../src/schema/auditLog.js";
+import { withOrgScope } from "../src/orgScope.js";
+import { DEFAULT_ORG_ID } from "../src/schema/orgConstants.js";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:vektor@localhost:5433/vektor";
 const APP_ROLE_PASSWORD = "vektor_app_test_password";
@@ -38,6 +41,12 @@ before(async () => {
   // the four audit_log policies + the SELECT/INSERT grant) has already been
   // applied to this database — same assumption every other test file in
   // this repo makes about schema state (nothing here runs migrations).
+  // Clear anything a previous run left behind. These tests assert exact row
+  // COUNTS ("still there, exactly once"), so a run that failed before its
+  // own cleanup makes the next run fail on the count rather than on the
+  // behaviour — which reads as the append-only guarantee having broken.
+  await adminSql`DELETE FROM audit_log WHERE actor_user_id LIKE 'rls-test-%'`;
+
   appDb = createDb(appRoleUrl.toString());
 });
 
@@ -47,10 +56,19 @@ after(async () => {
 });
 
 test("vektor_app can SELECT and INSERT into audit_log", async () => {
-  const [inserted] = await appDb
-    .insert(auditLog)
-    .values({ actor_user_id: "rls-test-insert", actor_role: "SuperAdmin", action: "rls.test", resource_type: "test" })
-    .returning();
+  // NW-015 changed this contract. 0011 replaced 0007's
+  // `audit_log_select_all`/`insert_any` (both `USING (true)`) with
+  // org-scoped equivalents, so an UNSCOPED insert now raises on
+  // current_setting() instead of succeeding. The append-only guarantee this
+  // file exists to prove is unchanged — it is asserted below — but every
+  // statement reaching audit_log as vektor_app must now declare which
+  // organisation it is acting for.
+  const [inserted] = await withOrgScope(appDb, DEFAULT_ORG_ID, async (tx) =>
+    tx
+      .insert(auditLog)
+      .values({ actor_user_id: "rls-test-insert", actor_role: "SuperAdmin", action: "rls.test", resource_type: "test" })
+      .returning(),
+  );
   assert.ok(inserted);
 
   const rows = await adminSql`SELECT * FROM audit_log WHERE actor_user_id = 'rls-test-insert'`;
@@ -65,9 +83,24 @@ test("vektor_app cannot UPDATE audit_log — no grant, and the policy would reje
     VALUES ('rls-test-update', 'SuperAdmin', 'rls.test', 'test')
   `;
 
+  // Org-scoped on purpose, and the reason is subtle. An UPDATE/DELETE on a
+  // table with RLS enabled also evaluates that table's SELECT policy in
+  // order to find its target rows, and 0011's SELECT policy casts
+  // `current_setting('vektor.org_id')::uuid`. On a POOLED connection that
+  // was scoped by some earlier transaction, the setting has reverted to the
+  // empty string rather than becoming unset, so that cast raises
+  // `invalid input syntax for type uuid: ""` BEFORE the privilege check
+  // reports `permission denied`. Unscoped, this assertion therefore passes
+  // or fails depending on what ran on the connection before it — which is
+  // not a property worth testing. Scoped, the cast succeeds, the policy
+  // evaluates, and the missing grant is what actually rejects the
+  // statement, which is the guarantee this test is about.
   await assert.rejects(
-    () => appDb.$client`UPDATE audit_log SET action = 'tampered' WHERE actor_user_id = 'rls-test-update'`,
-    /permission denied/,
+    () =>
+      withOrgScope(appDb, DEFAULT_ORG_ID, async (tx) =>
+        tx.execute(sql`UPDATE audit_log SET action = 'tampered' WHERE actor_user_id = 'rls-test-update'`),
+      ),
+    (err: unknown) => /permission denied/.test(String((err as { cause?: unknown })?.cause ?? err)),
   );
 
   const [row] = await adminSql<{ action: string }[]>`
@@ -84,9 +117,24 @@ test("vektor_app cannot DELETE from audit_log — the append-only guarantee hold
     VALUES ('rls-test-delete', 'SuperAdmin', 'rls.test', 'test')
   `;
 
+  // Org-scoped on purpose, and the reason is subtle. An UPDATE/DELETE on a
+  // table with RLS enabled also evaluates that table's SELECT policy in
+  // order to find its target rows, and 0011's SELECT policy casts
+  // `current_setting('vektor.org_id')::uuid`. On a POOLED connection that
+  // was scoped by some earlier transaction, the setting has reverted to the
+  // empty string rather than becoming unset, so that cast raises
+  // `invalid input syntax for type uuid: ""` BEFORE the privilege check
+  // reports `permission denied`. Unscoped, this assertion therefore passes
+  // or fails depending on what ran on the connection before it — which is
+  // not a property worth testing. Scoped, the cast succeeds, the policy
+  // evaluates, and the missing grant is what actually rejects the
+  // statement, which is the guarantee this test is about.
   await assert.rejects(
-    () => appDb.$client`DELETE FROM audit_log WHERE actor_user_id = 'rls-test-delete'`,
-    /permission denied/,
+    () =>
+      withOrgScope(appDb, DEFAULT_ORG_ID, async (tx) =>
+        tx.execute(sql`DELETE FROM audit_log WHERE actor_user_id = 'rls-test-delete'`),
+      ),
+    (err: unknown) => /permission denied/.test(String((err as { cause?: unknown })?.cause ?? err)),
   );
 
   const rows = await adminSql`SELECT 1 FROM audit_log WHERE actor_user_id = 'rls-test-delete'`;

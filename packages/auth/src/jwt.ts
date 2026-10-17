@@ -6,10 +6,39 @@
 import { createLocalJWKSet, createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey, type JSONWebKeySet } from "jose";
 import { ROLES, isRole, type Role } from "./roles.js";
 
+/**
+ * NW-015. Duplicated from @vektor/db's schema/orgConstants.ts rather than
+ * imported: packages/auth deliberately has no dependency on packages/db —
+ * it is used by services that never open a database connection (and by
+ * vektor-edge), and adding drizzle + postgres to its dependency tree to
+ * share one constant would be the wrong trade. The value is a fixed uuid
+ * and is asserted to match in packages/auth/tests/jwt.test.ts.
+ */
+export const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
+const ORG_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface VektorJwtPayload {
   sub: string;
   preferred_username?: string;
   role: Role;
+  /**
+   * NW-015: the organisation this principal acts for. Read from the token's
+   * `org_id` claim, falling back to DEFAULT_ORG_ID when the claim is absent.
+   *
+   * The fallback is what keeps single-tenant deployments working untouched:
+   * the existing Keycloak realm emits no such claim, and every row in the
+   * database already belongs to the default organisation, so an unmodified
+   * realm keeps resolving to exactly the data it resolved to before. A
+   * multi-tenant deployment adds a protocol mapper that puts the user's
+   * organisation in `org_id`, and nothing else has to change.
+   *
+   * Deliberately NOT a lookup. Resolving tenancy must stay free at the
+   * point of use: the sensor-to-operator leg measures p95 ~2s end to end
+   * and has no slack for a per-request round-trip, so the org travels in
+   * the token that was already being verified.
+   */
+  org_id: string;
 }
 
 export class JwtVerificationError extends Error {}
@@ -72,6 +101,24 @@ export function createJwtVerifier(options: JwtVerifierOptions): (token: string) 
 
     const preferred_username = typeof payload.preferred_username === "string" ? payload.preferred_username : undefined;
 
-    return { sub, preferred_username, role };
+    // Absent is fine and means the default organisation (see the field's
+    // doc comment). Present-but-malformed is NOT fine and must not quietly
+    // degrade to the default: a token asserting an organisation this code
+    // cannot parse is a token whose scope is unknown, and silently treating
+    // it as the default organisation would hand it the single-tenant
+    // deployment's entire dataset.
+    const orgClaim = payload.org_id;
+    let org_id: string;
+    if (orgClaim === undefined || orgClaim === null) {
+      org_id = DEFAULT_ORG_ID;
+    } else if (typeof orgClaim === "string" && ORG_ID_RE.test(orgClaim)) {
+      org_id = orgClaim;
+    } else {
+      throw new JwtVerificationError(
+        `token's org_id claim is not a uuid: ${JSON.stringify(orgClaim)}`,
+      );
+    }
+
+    return { sub, preferred_username, role, org_id };
   };
 }

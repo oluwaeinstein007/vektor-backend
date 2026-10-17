@@ -8,11 +8,19 @@ import { exportJWK, generateKeyPair, SignJWT, type JSONWebKeySet } from "jose";
 import type { VektorAuthPluginOptions } from "./plugin.js";
 import type { Role } from "./roles.js";
 
+export interface TestTokenOptions {
+  sub: string;
+  roles: Role[];
+  preferred_username?: string;
+  /** NW-015: omit to exercise the default-organisation fallback. */
+  org_id?: string;
+}
+
 export interface TestAuth {
   /** Pass straight through as a service's `auth` BuildAppOptions field. */
   authOptions: VektorAuthPluginOptions;
-  signToken(options: { sub: string; roles: Role[]; preferred_username?: string }): Promise<string>;
-  authHeader(options: { sub: string; roles: Role[]; preferred_username?: string }): Promise<{ authorization: string }>;
+  signToken(options: TestTokenOptions): Promise<string>;
+  authHeader(options: TestTokenOptions): Promise<{ authorization: string }>;
 }
 
 const KID = "test-key-1";
@@ -22,8 +30,14 @@ export async function createTestAuth(): Promise<TestAuth> {
   const publicJwk = await exportJWK(publicKey);
   const jwks: JSONWebKeySet = { keys: [{ ...publicJwk, kid: KID, alg: "RS256", use: "sig" }] };
 
-  async function signToken(options: { sub: string; roles: Role[]; preferred_username?: string }): Promise<string> {
-    return new SignJWT({ realm_access: { roles: options.roles }, preferred_username: options.preferred_username })
+  async function signToken(options: TestTokenOptions): Promise<string> {
+    return new SignJWT({
+      realm_access: { roles: options.roles },
+      preferred_username: options.preferred_username,
+      // Only set when asked, so the default-organisation fallback is what
+      // every pre-NW-015 test keeps exercising.
+      ...(options.org_id === undefined ? {} : { org_id: options.org_id }),
+    })
       .setProtectedHeader({ alg: "RS256", kid: KID })
       .setSubject(options.sub)
       .setIssuedAt()

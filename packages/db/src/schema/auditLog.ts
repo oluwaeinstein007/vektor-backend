@@ -18,6 +18,7 @@
 // against a `vektor_app` connection in tests/rls.test.ts.
 import { pgTable, pgPolicy, pgRole, uuid, text, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { DEFAULT_ORG_ID } from "./orgConstants.js";
 
 // `.existing()`: this role is provisioned once per Postgres cluster (a
 // cluster-level object, not scoped to this database) — a real deployment
@@ -32,6 +33,7 @@ export const auditLog = pgTable(
   "audit_log",
   {
     audit_id: uuid("audit_id").primaryKey().defaultRandom(),
+    org_id: uuid("org_id").notNull().default(DEFAULT_ORG_ID),
     actor_user_id: text("actor_user_id").notNull(),
     actor_role: text("actor_role").notNull(),
     action: text("action").notNull(),
