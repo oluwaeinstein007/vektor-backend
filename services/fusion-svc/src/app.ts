@@ -13,6 +13,12 @@ declare module "fastify" {
 }
 
 export interface BuildAppOptions {
+  /**
+   * Optional pipeline health probe. Omitted by tests and by any caller that
+   * only serves the REST surface, in which case /healthz reports on the
+   * HTTP server alone, as it always did.
+   */
+  pipelineHealth?: () => { healthy: boolean; consecutiveFailures: number; lastError?: string };
   db: VektorDb;
   auth: JwtVerifierOptions;
   logger?: boolean;
@@ -33,7 +39,30 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   app.register(cors, { origin: true });
   app.register(vektorAuthPlugin, options.auth);
 
-  app.get("/healthz", async () => ({ status: "ok" }));
+  // Reports the PIPELINE's health, not merely that Fastify is listening.
+  //
+  // This used to return a flat 200. A fusion-svc whose pipeline threw on
+  // every cycle — a missing column after an unapplied migration, say —
+  // served "ok" indefinitely while ingesting nothing: 117 consecutive
+  // failures and a green healthcheck, observed. On Kubernetes that is the
+  // worst available outcome, because the liveness probe passes and nothing
+  // ever restarts or alerts. A service that is up but doing no work must
+  // not claim to be healthy.
+  //
+  // Degraded only after several CONSECUTIVE failures, so a single transient
+  // Redis or Postgres blip doesn't flap the probe.
+  app.get("/healthz", async (_request, reply) => {
+    const health = options.pipelineHealth?.();
+    if (health && !health.healthy) {
+      return reply.code(503).send({
+        status: "degraded",
+        reason: "pipeline failing",
+        consecutive_failures: health.consecutiveFailures,
+        last_error: health.lastError,
+      });
+    }
+    return { status: "ok" };
+  });
 
   app.get("/", async () => ({
     service: "fusion-svc",

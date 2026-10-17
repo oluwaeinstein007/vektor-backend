@@ -54,7 +54,22 @@ async function main(): Promise<void> {
   await videoFrameConsumer.connect();
 
   const authOptions = authOptionsFromEnv();
-  const app = buildApp({ db, auth: authOptions });
+  // Declared before buildApp so /healthz can close over them. Consecutive,
+  // not cumulative: a pipeline that fails occasionally and recovers is
+  // healthy; one that cannot complete a single cycle is not.
+  let consecutiveFailures = 0;
+  let lastPipelineError: string | undefined;
+  const UNHEALTHY_AFTER_CONSECUTIVE_FAILURES = 5;
+
+  const app = buildApp({
+    db,
+    auth: authOptions,
+    pipelineHealth: () => ({
+      healthy: consecutiveFailures < UNHEALTHY_AFTER_CONSECUTIVE_FAILURES,
+      consecutiveFailures,
+      lastError: lastPipelineError,
+    }),
+  });
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info({ port: PORT }, "fusion-svc HTTP (health + blue-force/no-strike/sensors REST) listening");
 
@@ -125,8 +140,29 @@ async function main(): Promise<void> {
           POLL_BLOCK_MS,
         );
         processedCount += processed.length;
+        // Only a cycle that actually PROCESSED something counts as
+        // recovery. An empty cycle is not evidence of health: a pipeline
+        // that throws whenever it has work and returns cleanly when idle
+        // would otherwise reset this counter between every failure and
+        // never trip the probe — which is precisely the silent-but-green
+        // state this is meant to catch.
+        if (processed.length > 0) {
+          consecutiveFailures = 0;
+          lastPipelineError = undefined;
+        }
       } catch (err) {
-        logger.warn({ err }, "pipeline cycle failed");
+        consecutiveFailures += 1;
+        lastPipelineError = err instanceof Error ? err.message : String(err);
+        // Escalate past the first few: a cycle that keeps failing is an
+        // outage, and logging it at warn forever is how 117 failures go
+        // unnoticed behind a green healthcheck.
+        if (consecutiveFailures === UNHEALTHY_AFTER_CONSECUTIVE_FAILURES) {
+          logger.error(
+            { err, consecutiveFailures },
+            "pipeline has failed on every cycle — /healthz now reports degraded",
+          );
+        }
+        logger.warn({ err, consecutiveFailures }, "pipeline cycle failed");
       }
     }
   })();
