@@ -64,6 +64,13 @@
       "when": 1789437671556,
       "tag": "0008_ambitious_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792123111545,
+      "tag": "0009_mighty_moon_knight",
+      "breakpoints": true
     }
   ]
 }

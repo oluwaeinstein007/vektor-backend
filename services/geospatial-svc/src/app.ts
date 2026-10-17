@@ -10,6 +10,8 @@ import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
 import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
 import entitiesRoutes from "./routes/entities.js";
+// NW-018 (UC-2.2): historical playback + pattern-of-life read surface.
+import historyRoutes from "./history/routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -54,6 +56,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   app.get("/healthz", async () => ({ status: "ok" }));
 
   app.register(entitiesRoutes);
+  app.register(historyRoutes);
 
   return app;
 }
