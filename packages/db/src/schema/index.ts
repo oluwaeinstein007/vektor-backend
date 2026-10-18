@@ -12,3 +12,4 @@ export * from "./reporting.js";
 export * from "./sensorRegistry.js";
 export * from "./entityHistory.js";
 export * from "./apiKeys.js";
+export * from "./usage.js";
