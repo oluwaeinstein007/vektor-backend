@@ -13,3 +13,4 @@ export * from "./sensorRegistry.js";
 export * from "./entityHistory.js";
 export * from "./apiKeys.js";
 export * from "./usage.js";
+export * from "./modelRegistry.js";
