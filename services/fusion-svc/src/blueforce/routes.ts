@@ -7,6 +7,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { BlueForceAsset, NoStrikeZone } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import {
   listBlueForceAssets,
   upsertBlueForceAsset,
@@ -16,8 +17,6 @@ import {
   deleteNoStrikeZone,
 } from "./queries.js";
 import { toWireBlueForceAsset, toWireNoStrikeZone } from "./mappers.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 
 const AssetIdParams = z.object({ id: z.string().uuid() });
 const ZoneIdParams = z.object({ id: z.string().uuid() });

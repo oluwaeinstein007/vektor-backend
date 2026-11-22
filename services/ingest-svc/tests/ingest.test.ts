@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Kafka, type Consumer, type Producer } from "kafkajs";
 import { createKafkaClient, topicName } from "@vektor/kafka";
-import { runIngest } from "../src/app.js";
+import { runIngest } from "../src/rtspApp.js";
 import type { FrameExtractorHandle } from "../src/rtsp/frameExtractor.js";
 
 const KAFKA_BROKERS = (process.env.KAFKA_BROKERS ?? "localhost:19092").split(",");

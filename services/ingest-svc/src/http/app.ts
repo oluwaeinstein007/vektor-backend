@@ -28,6 +28,7 @@ import { z } from "zod";
 import type { Producer } from "kafkajs";
 import { assertValidSensorTs, topicName, SensorTimestampError, type VektorEnv } from "@vektor/kafka";
 import { IotTelemetryEvent, FieldPhoneTelemetryPayload } from "@vektor/shared";
+import { ErrorResponse, registerDefaultErrorHandler } from "@vektor/http";
 import { publishFrame, UnparsableFrameError } from "../kafka/publishFrame.js";
 
 const FieldTelemetryBody = z.object({
@@ -43,7 +44,6 @@ const FieldTelemetryBody = z.object({
   sensor_ts: z.string().datetime().optional(),
 });
 
-const ErrorResponse = z.object({ error: z.string() });
 const AcceptedResponse = z.object({ status: z.literal("accepted"), event_id: z.string().uuid() });
 
 export interface FieldIngestAppOptions {
@@ -76,6 +76,7 @@ export function buildFieldIngestApp(options: FieldIngestAppOptions): FastifyInst
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
+  app.register(registerDefaultErrorHandler);
   app.register(cors, { origin: true });
 
   // image/jpeg has no business going through Fastify's default JSON body

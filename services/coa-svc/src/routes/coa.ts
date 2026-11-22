@@ -3,11 +3,10 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { COA } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { listCoasBySituation, listAllCoas, getCoaById, decideCoa } from "../db/coaQueries.js";
 import { toWireCoa } from "../db/mappers.js";
 import type { AuditClient } from "../audit/client.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 
 const SituationIdParams = z.object({ situation_id: z.string().uuid() });
 const CoaIdParams = z.object({ coa_id: z.string().uuid() });

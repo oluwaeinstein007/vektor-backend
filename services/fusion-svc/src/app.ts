@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
 import { vektorAuthPlugin, type JwtVerifierOptions } from "@vektor/auth";
+import { registerDefaultErrorHandler } from "@vektor/http";
 import blueForceRoutes from "./blueforce/routes.js";
 import sensorRoutes from "./sensors/routes.js";
 
@@ -24,6 +25,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.register(registerDefaultErrorHandler);
 
   app.decorate("db", options.db);
 

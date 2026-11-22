@@ -16,6 +16,7 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@vektor/auth": "workspace:*",
+    "@vektor/http": "workspace:*",
     "@vektor/db": "workspace:*",
     "@vektor/kafka": "workspace:*",
     "@vektor/redis": "workspace:*",

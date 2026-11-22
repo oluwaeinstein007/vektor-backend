@@ -69,6 +69,25 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/http:
+    dependencies:
+      fastify-plugin:
+        specifier: ^5.1.0
+        version: 5.1.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      fastify:
+        specifier: ^5.2.0
+        version: 5.12.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/kafka:
     dependencies:
       '@vektor/proto':
@@ -157,6 +176,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/redis':
         specifier: workspace:*
         version: link:../../packages/redis
@@ -215,6 +237,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -261,6 +286,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/qdrant':
         specifier: workspace:*
         version: link:../../packages/qdrant
@@ -310,6 +338,9 @@ importers:
       '@vektor/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/kafka':
         specifier: workspace:*
         version: link:../../packages/kafka
@@ -356,6 +387,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/kafka':
         specifier: workspace:*
         version: link:../../packages/kafka
@@ -408,6 +442,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/kafka':
         specifier: workspace:*
         version: link:../../packages/kafka
@@ -475,6 +512,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -509,6 +549,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/kafka':
         specifier: workspace:*
         version: link:../../packages/kafka
@@ -567,6 +610,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/kafka':
         specifier: workspace:*
         version: link:../../packages/kafka
@@ -660,6 +706,9 @@ importers:
       '@vektor/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vektor/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@vektor/shared':
         specifier: workspace:*
         version: link:../../packages/shared

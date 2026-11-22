@@ -6,9 +6,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { Alert } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { listAlerts, applyAlertAction, type AlertActionType } from "../db/alerts.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 const AlertIdParams = z.object({ id: z.string().uuid() });
 
 const ActionBody = z.object({

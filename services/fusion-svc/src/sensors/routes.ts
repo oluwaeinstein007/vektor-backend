@@ -9,10 +9,9 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { SensorRegistration, SensorType } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { listSensorRegistrations, upsertSensorRegistration, deleteSensorRegistration } from "./queries.js";
 import { toWireSensorRegistration } from "./mappers.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 const SensorIdParams = z.object({ id: z.string().min(1) });
 
 const RegisterSensorBody = z.object({

@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import type { Queue } from "bullmq";
+import { registerDefaultErrorHandler } from "@vektor/http";
 import type { LocalStore } from "./db/localStore.js";
 import syncRoutes from "./routes/sync.js";
 import type { IntakeJob } from "./queue/intakeQueue.js";
@@ -20,6 +21,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.register(registerDefaultErrorHandler);
 
   app.register(cors, { origin: true });
 

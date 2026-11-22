@@ -6,10 +6,9 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { Entity } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { getEntity, listEntities, tagEntity } from "../queries/entities.js";
 import { toWireEntity } from "../mappers/entity.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 
 // Response schemas are the enforcement mechanism for REQ-9.1 ("100% of
 // public endpoints ... schema-validated"): fastify-type-provider-zod

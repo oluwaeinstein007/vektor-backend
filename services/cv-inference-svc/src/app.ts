@@ -3,6 +3,7 @@ import { serializerCompiler, validatorCompiler, jsonSchemaTransform, type ZodTyp
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
+import { registerDefaultErrorHandler } from "@vektor/http";
 import modelsRoutes from "./routes/models.js";
 import type { DetectionModel } from "./inference/session.js";
 
@@ -24,6 +25,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.register(registerDefaultErrorHandler);
 
   app.register(vektorAuthPlugin, options.auth);
 

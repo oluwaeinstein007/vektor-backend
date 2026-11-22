@@ -5,7 +5,7 @@
 // adapter just sets that adapter's env vars and leaves the rest unset.
 import pino from "pino";
 import { createKafkaClient, type VektorEnv } from "@vektor/kafka";
-import { runIngest } from "./app.js";
+import { runIngest } from "./rtspApp.js";
 import type { FrameRotation } from "./rtsp/frameExtractor.js";
 import { startAisAdapter } from "./ais/aisAdapter.js";
 import { startAdsbAdapter } from "./adsb/adsbAdapter.js";

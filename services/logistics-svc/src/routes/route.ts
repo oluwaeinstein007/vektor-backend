@@ -10,9 +10,8 @@ import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { Sql } from "postgres";
 import { RouteRequest, RouteResult } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { findRoute, setEdgeBlocked } from "../routing/findRoute.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 const EdgeIdParams = z.object({ id: z.coerce.number().int() });
 const BlockBody = z.object({ blocked: z.boolean() });
 

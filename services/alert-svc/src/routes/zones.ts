@@ -5,9 +5,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { GeofenceTrigger, AlertSeverity, EntityAffiliation, AlertChannel, NotifyConfig } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { createZone, deleteZone, listZones } from "../db/geofenceZones.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 const ZoneIdParams = z.object({ id: z.string().uuid() });
 
 const CreateZoneBody = z.object({

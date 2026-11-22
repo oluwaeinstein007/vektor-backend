@@ -8,10 +8,10 @@ import type { FastifyPluginAsync } from "fastify";
 import fastifyMultipart from "@fastify/multipart";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { ErrorResponse } from "@vektor/http";
 import { DetectionModel } from "../inference/session.js";
 
 const UploadResponse = z.object({ status: z.literal("ok"), executionProvider: z.enum(["cuda", "cpu"]) });
-const ErrorResponse = z.object({ error: z.string() });
 
 export interface ModelsRoutesOptions {
   getModel: () => DetectionModel;

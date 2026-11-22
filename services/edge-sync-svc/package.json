@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
+    "@vektor/http": "workspace:*",
     "@vektor/kafka": "workspace:*",
     "@vektor/shared": "workspace:*",
     "better-sqlite3": "^13.0.3",

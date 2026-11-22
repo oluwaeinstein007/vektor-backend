@@ -7,6 +7,7 @@ import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
 import type { Sql } from "postgres";
 import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
+import { registerDefaultErrorHandler } from "@vektor/http";
 import inventoryRoutes from "./routes/inventory.js";
 import buildRouteRoutes from "./routes/route.js";
 
@@ -29,6 +30,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.register(registerDefaultErrorHandler);
 
   app.decorate("db", options.db);
 

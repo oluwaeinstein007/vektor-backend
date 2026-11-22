@@ -8,6 +8,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { COA } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import type { QdrantClient } from "@vektor/qdrant";
 import type { CoaMode } from "../llm/generateCoa.js";
 import { generateCoa } from "../llm/generateCoa.js";
@@ -19,8 +20,6 @@ const GenerateBody = z.object({
   target_entity_id: z.string().uuid(),
   num_options: z.number().int().min(1).max(10).optional(),
 });
-
-const ErrorResponse = z.object({ error: z.string() });
 
 const generateRoutes: FastifyPluginAsync<{
   qdrant: QdrantClient;

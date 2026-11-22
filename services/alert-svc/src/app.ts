@@ -6,6 +6,7 @@ import fastifySwaggerUi from "@fastify/swagger-ui";
 import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import type { VektorDb } from "@vektor/db";
 import { vektorAuthPlugin, type VektorAuthPluginOptions } from "@vektor/auth";
+import { registerDefaultErrorHandler } from "@vektor/http";
 import zoneRoutes from "./routes/zones.js";
 import alertRoutes from "./routes/alerts.js";
 
@@ -27,6 +28,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.register(registerDefaultErrorHandler);
 
   app.decorate("db", options.db);
 

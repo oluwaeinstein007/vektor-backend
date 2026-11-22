@@ -8,10 +8,9 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { ReportFormat, Report } from "@vektor/shared";
+import { ErrorResponse } from "@vektor/http";
 import { createPendingReport, getReport } from "../db/reports.js";
 import { generateReport } from "../generate/orchestrator.js";
-
-const ErrorResponse = z.object({ error: z.string() });
 const ReportIdParams = z.object({ id: z.string().uuid() });
 const CreateReportBody = z.object({ format: ReportFormat });
 

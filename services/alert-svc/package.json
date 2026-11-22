@@ -18,6 +18,7 @@
     "@fastify/swagger": "^9.4.0",
     "@fastify/swagger-ui": "^5.1.0",
     "@vektor/auth": "workspace:*",
+    "@vektor/http": "workspace:*",
     "@vektor/db": "workspace:*",
     "@vektor/redis": "workspace:*",
     "@vektor/shared": "workspace:*",
